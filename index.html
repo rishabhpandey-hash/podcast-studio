@@ -222,6 +222,8 @@ select option{background:#fff;color:var(--ink)}
 .rec-mode button{border-radius:99px;padding:7px 15px;font-size:13px}
 .rec-mode button.active{background:#f1e9fe;border-color:rgba(139,92,246,.55);color:#5b21b6}
 .rec-audio-note{background:var(--panel-2);border:1px solid var(--line);border-radius:15px;padding:36px 14px;text-align:center;color:var(--muted)}
+.guest-tip{background:var(--info-soft);border:1px solid #d9d6f7;border-radius:14px;padding:13px 16px;font-size:13.5px;color:var(--muted);line-height:1.55}
+.guest-tip b{color:var(--info)}
 .rec-live{color:var(--bad);font-weight:800}
 
 footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
@@ -243,7 +245,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <button id="recHereBtn" class="primary" onclick="STUDIO.openRecorder()">⏺ Record here</button>
       <button id="uploadBtn">⬆ Upload</button>
       <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
-      <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener"><button title="Record long multi-guest sessions in Descript">🎙 Descript</button></a>
+      <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener"><button title="Record with guests: create a Room or SquadCast session in Descript — guests join by link, the recording lands here automatically">🎧 With guests</button></a>
       <button id="refreshBtn" title="Check for new recordings">↻</button>
       <button id="signOutBtn" title="Sign out" style="display:none" onclick="STUDIO.signOut()">⎋</button>
     </div>
@@ -290,9 +292,10 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
     <div class="show-more" id="showMoreWrap" style="display:none"><button id="showMoreBtn"></button></div>
     <div class="empty" id="epEmpty" style="display:none">
       <b>No recordings yet.</b><br>
-      Hit “⏺ Record here” to record straight from this page,<br>
-      “⬆ Upload” to drop in a file from anywhere (Zoom, phone…),<br>
-      or record in Descript and it appears here automatically.
+      Hit “⏺ Record here” to record yourself straight from this page,<br>
+      “🎧 With guests” to start a Descript Room / SquadCast session (guests join by invite link),<br>
+      or “⬆ Upload” to drop in a file from anywhere (Zoom, phone…).<br>
+      Everything recorded on the connected account appears here automatically.
     </div>
   </div>
 
@@ -399,7 +402,11 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <button class="primary" onclick="STUDIO.useRecording()">✓ Use this recording</button>
       <button onclick="STUDIO.discardRecording()">Discard & re-record</button>
     </div>
-    <p class="note" style="margin:0">Camera recordings can run ~10 minutes here (100 MB). Audio-only runs much longer. For long multi-guest video sessions, use Descript.</p>
+    <p class="note" style="margin:0">This records <b>you</b> (solo) — camera up to ~10 minutes here, audio-only much longer.</p>
+    <div class="guest-tip">
+      <b>🎧 Recording with a guest?</b> Use a Descript Room or SquadCast session — send the guest the invite link (they don't need an account), record together in studio quality, and the recording appears on this dashboard automatically when you're done.
+      <div style="margin-top:10px"><a href="https://web.descript.com" target="_blank" rel="noopener"><button>Open Descript → New Room / SquadCast</button></a></div>
+    </div>
   </div>
 </div>
 <div id="toast"></div>
