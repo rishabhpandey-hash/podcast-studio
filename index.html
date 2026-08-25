@@ -21,7 +21,9 @@ button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font
 button.primary:hover{background:#5b21b6}
 button:disabled{opacity:.55;cursor:default}
 .wrap{max-width:1180px;margin:0 auto;padding:20px 22px 60px}
-header{display:flex;align-items:center;gap:14px;padding:14px 0 18px}
+header{display:flex;align-items:center;gap:12px;padding:14px 0 18px;flex-wrap:wrap}
+header>div:first-of-type{min-width:220px;flex:1}
+header button{white-space:nowrap}
 header .logo{max-height:40px;max-width:150px;object-fit:contain}
 header .brandname{font-weight:700;font-size:19px}
 header .sub{color:var(--muted);font-size:13px}
@@ -77,7 +79,17 @@ h2{font-size:17px;margin:26px 0 12px}
 .login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:10px 0 14px}
 footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
 .back{background:none;border:none;color:var(--brand);font-weight:600;padding:0}
-#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw}
+#recModal{position:fixed;inset:0;background:rgba(20,15,35,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.rec-card{background:var(--card);border-radius:16px;padding:20px;width:min(640px,96vw);display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 60px rgba(20,10,60,.35)}
+.rec-card video{width:100%;aspect-ratio:16/9;background:#111;border-radius:12px;object-fit:cover}
+.rec-card input{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+.rec-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rec-mode{display:flex;gap:6px}
+.rec-mode button{border-radius:99px;padding:6px 14px;font-size:13.5px}
+.rec-mode button.active{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
+.rec-audio-note{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:26px 14px;text-align:center;color:var(--muted)}
+.rec-live{color:var(--bad);font-weight:700}
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;z-index:60}
 #toast.show{opacity:1}
 @media (max-width:640px){ .wrap{padding:12px 12px 50px} .msg{max-width:95%} }
 </style>
@@ -91,7 +103,8 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
       <div class="sub">Record once — get your edited episode, reels, and LinkedIn posts.</div>
     </div>
     <div class="spacer"></div>
-    <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener" style="display:none"><button class="primary">🎙 Record in Descript</button></a>
+    <button id="recHereBtn" class="primary" style="display:none" onclick="STUDIO.openRecorder()">⏺ Record here</button>
+    <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener" style="display:none"><button>🎙 Record in Descript</button></a>
     <button id="uploadBtn" style="display:none">⬆ Upload recording</button>
     <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
     <button id="refreshBtn" style="display:none">↻ Check for new recordings</button>
@@ -113,8 +126,9 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
     <div class="grid" id="epGrid"></div>
     <div class="empty" id="epEmpty" style="display:none">
       No recordings found yet.<br><br>
-      Hit “🎙 Record in Descript” to record your podcast or webinar — it appears here automatically when you're done.<br>
-      Already have a recording (Zoom, phone, anywhere)? “⬆ Upload recording” drops it straight in.
+      Hit “⏺ Record here” to record straight from this page — it goes into production the moment you stop.<br>
+      Already have a recording (Zoom, phone, anywhere)? “⬆ Upload recording” drops it straight in.<br>
+      For long multi-guest sessions, record in Descript and it appears here automatically.
     </div>
   </div>
 
@@ -183,6 +197,32 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
     Recording and editing runs on <a href="https://www.descript.com" target="_blank" rel="noopener">Descript</a>, driven by your dedicated AI production agents. The system improves with releases every quarter.
   </footer>
 </div>
+
+<div id="recModal" style="display:none">
+  <div class="rec-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0">Record an episode</h2>
+      <button class="back" onclick="STUDIO.closeRecorder()">✕ Close</button>
+    </div>
+    <div class="rec-mode" id="recMode">
+      <button data-mode="video" class="active" onclick="STUDIO.setRecMode('video')">🎥 Camera + mic</button>
+      <button data-mode="audio" onclick="STUDIO.setRecMode('audio')">🎙 Audio only</button>
+    </div>
+    <video id="recPreview" muted autoplay playsinline></video>
+    <div class="rec-audio-note" id="recAudioNote" style="display:none">🎙 Microphone live — audio-only recording (up to ~90 minutes)</div>
+    <input id="recName" placeholder="Episode name" autocomplete="off">
+    <div class="rec-row">
+      <button class="primary" id="recStart" onclick="STUDIO.startRec()">⏺ Start recording</button>
+      <button id="recStop" style="display:none" onclick="STUDIO.stopRec()">⏹ Stop</button>
+      <span class="note" id="recStatus"></span>
+    </div>
+    <div class="rec-row" id="recDone" style="display:none">
+      <button class="primary" onclick="STUDIO.useRecording()">✓ Use this recording</button>
+      <button onclick="STUDIO.discardRecording()">Discard & re-record</button>
+    </div>
+    <p class="note" id="recHint">Camera recordings can run ~10 minutes here (100 MB). Audio-only runs much longer. For long multi-guest video sessions, use Record in Descript.</p>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script id="studio-data" type="application/json">{}</script>
@@ -219,6 +259,7 @@ function show(view){
   $("refreshBtn").style.display = view==="listView" ? "" : "none";
   $("recordBtn").style.display = view==="listView" ? "" : "none";
   $("uploadBtn").style.display = view==="listView" ? "" : "none";
+  $("recHereBtn").style.display = view==="listView" ? "" : "none";
 }
 
 function renderHeader(){
@@ -463,6 +504,106 @@ window.STUDIO = {
     const p = (state.detail?.posts||[]).find(x=>x.id===id);
     if(!p) return;
     navigator.clipboard.writeText(p.body).then(()=>toast("Post copied — paste it into LinkedIn"));
+  },
+
+  // ---- in-dashboard recorder ----
+  async openRecorder(){
+    state.rec = { mode:"video", stream:null, mr:null, chunks:[], size:0, t0:0, timer:null, blob:null, mime:"" };
+    $("recModal").style.display = "flex";
+    $("recName").value = `Episode — ${new Date().toLocaleDateString(undefined,{day:"numeric",month:"short"})}`;
+    $("recDone").style.display = "none"; $("recStart").style.display = ""; $("recStop").style.display = "none"; $("recStatus").textContent = "";
+    await this._startPreview();
+  },
+
+  async _startPreview(){
+    const r = state.rec;
+    try{
+      if(r.stream) r.stream.getTracks().forEach(t=>t.stop());
+      r.stream = await navigator.mediaDevices.getUserMedia(
+        r.mode === "audio"
+          ? { audio: { echoCancellation:true, noiseSuppression:true } }
+          : { video: { width:1280, height:720 }, audio: { echoCancellation:true, noiseSuppression:true } }
+      );
+      const v = $("recPreview");
+      v.style.display = r.mode === "audio" ? "none" : "";
+      $("recAudioNote").style.display = r.mode === "audio" ? "" : "none";
+      v.srcObject = r.stream; v.muted = true; v.controls = false;
+    }catch(e){
+      toast("Camera/microphone access was blocked — allow it in your browser and try again.");
+      this.closeRecorder();
+    }
+  },
+
+  setRecMode(mode){
+    if(state.rec?.mr) return toast("Stop the current recording first");
+    state.rec.mode = mode;
+    for(const b of document.querySelectorAll("#recMode button")) b.classList.toggle("active", b.dataset.mode===mode);
+    this._startPreview();
+  },
+
+  startRec(){
+    const r = state.rec;
+    if(!r?.stream) return;
+    const cands = r.mode === "audio"
+      ? ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
+      : ["video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+    r.mime = cands.find(c => window.MediaRecorder && MediaRecorder.isTypeSupported(c)) || "";
+    if(!r.mime) return toast("This browser can't record — use Chrome, Edge or Safari, or upload a file instead.");
+    r.chunks = []; r.size = 0; r.blob = null;
+    r.mr = new MediaRecorder(r.stream, { mimeType: r.mime, videoBitsPerSecond: 1_400_000, audioBitsPerSecond: 128_000 });
+    r.mr.ondataavailable = e => {
+      if(!e.data.size) return;
+      r.chunks.push(e.data); r.size += e.data.size;
+      if(r.size > 95*1024*1024){ toast("Reached the size limit — recording stopped and saved."); this.stopRec(); }
+    };
+    r.mr.onstop = () => {
+      r.blob = new Blob(r.chunks, { type: r.mime.split(";")[0] });
+      clearInterval(r.timer); r.mr = null;
+      const v = $("recPreview");
+      if(r.mode !== "audio"){ v.srcObject = null; v.src = URL.createObjectURL(r.blob); v.muted = false; v.controls = true; }
+      $("recStatus").innerHTML = `Recorded ${this._fmtRec()} — review it, then use or discard.`;
+      $("recDone").style.display = ""; $("recStop").style.display = "none";
+    };
+    r.t0 = Date.now();
+    r.mr.start(1000);
+    r.timer = setInterval(()=>{ $("recStatus").innerHTML = `<span class="rec-live">● REC</span> ${this._fmtRec()}`; }, 500);
+    $("recStart").style.display = "none"; $("recStop").style.display = ""; $("recDone").style.display = "none";
+  },
+
+  _fmtRec(){
+    const r = state.rec;
+    const s = Math.floor((Date.now()-r.t0)/1000);
+    return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")} · ${(r.size/1048576).toFixed(1)} MB`;
+  },
+
+  stopRec(){ state.rec?.mr?.stop(); },
+
+  discardRecording(){
+    const r = state.rec; if(!r) return;
+    r.chunks = []; r.size = 0; r.blob = null;
+    $("recDone").style.display = "none"; $("recStart").style.display = ""; $("recStatus").textContent = "";
+    this._startPreview();
+  },
+
+  useRecording(){
+    const r = state.rec;
+    if(!r?.blob) return;
+    const ext = r.mime.includes("mp4") ? (r.mode==="audio" ? "m4a" : "mp4") : "webm";
+    const name = ($("recName").value.trim() || "Episode").replace(/[^\w\- ()]/g," ").trim();
+    const file = new File([r.blob], `${name}.${ext}`, { type: r.blob.type });
+    this.closeRecorder();
+    toast("Uploading your recording…");
+    this.uploadFile(file);
+  },
+
+  closeRecorder(){
+    const r = state.rec;
+    if(r?.mr){ try{ r.mr.stop(); }catch{} }
+    if(r?.timer) clearInterval(r.timer);
+    if(r?.stream) r.stream.getTracks().forEach(t=>t.stop());
+    const v = $("recPreview"); v.srcObject = null; v.removeAttribute("src"); v.controls = false; v.muted = true;
+    state.rec = null;
+    $("recModal").style.display = "none";
   },
 
   uploadFile(file){
