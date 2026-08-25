@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podcast Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%236d28d9'/%3E%3Ccircle cx='50' cy='42' r='16' fill='none' stroke='white' stroke-width='8'/%3E%3Cpath d='M28 46c0 12 10 22 22 22s22-10 22-22M50 68v14' stroke='white' stroke-width='8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f6f5fa; --card:#ffffff; --ink:#17151f; --muted:#6b6880; --line:#e6e3f0;
+  --brand:#6d28d9; --brand-soft:#f1ebfd; --ok:#137a4b; --ok-soft:#e3f5ec;
+  --warn:#92400e; --warn-soft:#fdf1e0; --bad:#b3261e; --bad-soft:#fdeceb;
+  --info:#1d4ed8; --info-soft:#e8effd; --radius:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.55 "Inter",-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+a{color:var(--brand);text-decoration:none}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 14px}
+button:hover{border-color:#c9c3e2}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+button.primary:hover{background:#5b21b6}
+button:disabled{opacity:.55;cursor:default}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 22px 60px}
+header{display:flex;align-items:center;gap:14px;padding:14px 0 18px}
+header .logo{max-height:40px;max-width:150px;object-fit:contain}
+header .brandname{font-weight:700;font-size:19px}
+header .sub{color:var(--muted);font-size:13px}
+header .spacer{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.badge.ready{background:var(--ok-soft);color:var(--ok)}
+.badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending{background:var(--warn-soft);color:var(--warn)}
+.badge.new{background:var(--info-soft);color:var(--info)}
+.badge.failed{background:var(--bad-soft);color:var(--bad)}
+.badge.none,.badge.draft{background:#eeecf5;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.ep-card{cursor:pointer;transition:box-shadow .15s}
+.ep-card:hover{box-shadow:0 4px 18px rgba(60,40,120,.10)}
+.ep-card h3{margin:0 0 6px;font-size:16px}
+.meta{color:var(--muted);font-size:13px;display:flex;gap:12px;flex-wrap:wrap}
+.counts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.count-pill{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:4px 10px;font-size:12.5px}
+.count-pill b{font-size:13.5px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 16px}
+.toolbar .spacer{flex:1}
+h2{font-size:17px;margin:26px 0 12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:22px 0 16px}
+.tabs button{border:none;background:none;border-radius:8px 8px 0 0;padding:9px 16px;color:var(--muted);font-weight:600}
+.tabs button.active{color:var(--brand);box-shadow:inset 0 -2.5px 0 var(--brand)}
+.videobar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.reel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.reel{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--card)}
+.reel h4{margin:0 0 8px;font-size:14px}
+.reel .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.reel .actions a,.reel .actions span.dis{font-size:13px;font-weight:600}
+.post{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card);margin-bottom:12px}
+.post .hook{font-weight:700;margin-bottom:6px}
+.post pre{white-space:pre-wrap;font:inherit;margin:0 0 10px}
+.post .fc{background:var(--bg);border-radius:9px;padding:8px 12px;font-size:13.5px;color:var(--muted);margin-bottom:10px}
+.post .fc b{color:var(--ink)}
+.chat{display:flex;flex-direction:column;gap:10px;max-height:430px;overflow:auto;padding:4px 2px;margin-bottom:12px}
+.msg{max-width:82%;border-radius:14px;padding:10px 14px;font-size:14px}
+.msg.you{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg .who{font-size:11px;opacity:.75;margin-bottom:3px}
+.chatline{display:flex;gap:8px}
+.chatline textarea{flex:1;resize:vertical;min-height:52px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+.chatline select{border:1px solid var(--line);border-radius:10px;padding:8px;max-width:180px;font:inherit;background:var(--card)}
+.note{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:36px 10px}
+.timeline{font-size:13.5px}
+.timeline div{padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
+.timeline div:last-child{border-bottom:none}
+.timeline .t{color:var(--muted);min-width:118px}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px}
+.login{max-width:420px;margin:12vh auto}
+.login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:10px 0 14px}
+footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
+.back{background:none;border:none;color:var(--brand);font-weight:600;padding:0}
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw}
+#toast.show{opacity:1}
+@media (max-width:640px){ .wrap{padding:12px 12px 50px} .msg{max-width:95%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img id="logo" class="logo" style="display:none" alt="">
+    <div>
+      <div class="brandname" id="clientName">Podcast Studio</div>
+      <div class="sub">Record once — get your edited episode, reels, and LinkedIn posts.</div>
+    </div>
+    <div class="spacer"></div>
+    <button id="refreshBtn" style="display:none">↻ Check for new recordings</button>
+  </header>
+
+  <div id="loginView" class="login card" style="display:none">
+    <h2 style="margin-top:0">Welcome</h2>
+    <p class="note">Paste the access key you received from your account manager.</p>
+    <input id="keyInput" placeholder="your-access-key" autocomplete="off">
+    <button class="primary" style="width:100%" onclick="STUDIO.login()">Open my studio</button>
+  </div>
+
+  <div id="listView" style="display:none">
+    <div class="toolbar">
+      <h2 style="margin:0">Your episodes</h2>
+      <div class="spacer"></div>
+      <span class="note" id="listNote"></span>
+    </div>
+    <div class="grid" id="epGrid"></div>
+    <div class="empty" id="epEmpty" style="display:none">
+      No recordings found yet.<br><br>
+      Record your podcast or webinar in Descript, then hit “Check for new recordings”.
+    </div>
+  </div>
+
+  <div id="detailView" style="display:none">
+    <div class="toolbar">
+      <button class="back" onclick="STUDIO.backToList()">← All episodes</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start">
+        <div>
+          <h2 style="margin:0 0 6px" id="dName"></h2>
+          <div class="meta" id="dMeta"></div>
+        </div>
+        <div id="dStatus"></div>
+      </div>
+      <div id="dError"></div>
+      <div class="videobar" style="margin-top:14px" id="dActions"></div>
+      <div class="note" id="dProgress" style="margin-top:10px"></div>
+    </div>
+
+    <div class="tabs">
+      <button data-tab="reels" class="active" onclick="STUDIO.setTab('reels')">Reels <span id="tabReelsN"></span></button>
+      <button data-tab="posts" onclick="STUDIO.setTab('posts')">LinkedIn posts <span id="tabPostsN"></span></button>
+      <button data-tab="assistant" onclick="STUDIO.setTab('assistant')">AI assistant</button>
+      <button data-tab="activity" onclick="STUDIO.setTab('activity')">Activity</button>
+    </div>
+
+    <div id="tab-reels">
+      <div class="toolbar">
+        <span class="note">Short vertical clips cut from this episode, ready for Instagram, TikTok, YouTube Shorts and LinkedIn.</span>
+        <div class="spacer"></div>
+        <button id="reelsBtn" onclick="STUDIO.makeReels()">Generate reels</button>
+      </div>
+      <div class="reel-grid" id="reelGrid"></div>
+      <div class="empty" id="reelEmpty" style="display:none">No reels yet. They are generated automatically after the episode is produced — or press “Generate reels”.</div>
+    </div>
+
+    <div id="tab-posts" style="display:none">
+      <div class="toolbar">
+        <span class="note">Publish-ready posts written from what was actually said in this episode.</span>
+        <div class="spacer"></div>
+        <button id="postsBtn" onclick="STUDIO.makePosts()">Regenerate posts</button>
+      </div>
+      <div id="postList"></div>
+      <div class="empty" id="postEmpty" style="display:none">No posts yet. They are written automatically after the episode is produced.</div>
+    </div>
+
+    <div id="tab-assistant" style="display:none">
+      <div class="card">
+        <p class="note" style="margin-top:0">Tell the AI editor what to change — in plain language. Examples: “Tighten the intro, it drags”, “Remove the section where we discuss pricing”, “Make reel 2 punchier and add bigger captions”. Edits take a few minutes; links update automatically when done.</p>
+        <div class="chat" id="chatLog"></div>
+        <div class="chatline">
+          <select id="chatTarget"><option value="">Whole project</option></select>
+          <textarea id="chatInput" placeholder="What should we change?"></textarea>
+          <button class="primary" id="chatSend" onclick="STUDIO.sendCommand()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-activity" style="display:none">
+      <div class="card timeline" id="jobList"></div>
+    </div>
+  </div>
+
+  <footer>
+    Recording and editing runs on <a href="https://www.descript.com" target="_blank" rel="noopener">Descript</a>, driven by your dedicated AI production agents. The system improves with releases every quarter.
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script id="studio-data" type="application/json">{}</script>
+<script>
+const API = "https://mgnjlymtjmcoskqinhid.supabase.co/functions/v1/studio";
+
+const state = {
+  key: null, client: null, episodes: [],
+  episodeId: null, detail: null, tab: "reels",
+  pollTimer: null,
+};
+
+function $(id){ return document.getElementById(id); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"), 3200); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(d){ if(!d) return ""; try{ return new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});}catch{return "";} }
+function fmtDur(s){ if(!s) return ""; s=Math.round(s); const m=Math.floor(s/60); return m>=60? `${Math.floor(m/60)}h ${m%60}m` : `${m}m ${s%60}s`; }
+function badge(status){ const label={new:"New recording",producing:"Producing…",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing…",pending:"Queued",publishing:"Rendering…",working:"Working…",done:"Done",draft:"Draft"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
+
+async function api(path, opts={}){
+  const url = new URL(API + path);
+  url.searchParams.set("key", state.key);
+  const res = await fetch(url, { headers:{ "Content-Type":"application/json" }, ...opts });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function mirror(){ $("studio-data").textContent = JSON.stringify({ client: state.client, episodes: state.episodes, episodeId: state.episodeId, detail: state.detail, tab: state.tab }); }
+
+// ---------- views ----------
+function show(view){
+  for(const v of ["loginView","listView","detailView"]) $(v).style.display = v===view ? "" : "none";
+  $("refreshBtn").style.display = view==="listView" ? "" : "none";
+}
+
+function renderHeader(){
+  if(!state.client) return;
+  $("clientName").textContent = state.client.name ? `${state.client.name} — Podcast Studio` : "Podcast Studio";
+  if(state.client.logo_url){ const l=$("logo"); l.src=state.client.logo_url; l.style.display=""; l.onerror=()=>l.style.display="none"; }
+}
+
+function renderList(){
+  renderHeader();
+  const grid = $("epGrid"); grid.innerHTML = "";
+  const eps = state.episodes;
+  $("epEmpty").style.display = eps.length ? "none" : "";
+  $("listNote").textContent = state.client?.connected
+    ? (state.client.auto_produce ? "New recordings are produced automatically." : "")
+    : "Recording account not connected yet — ask your account manager.";
+  for(const e of eps){
+    const card = document.createElement("div");
+    card.className = "card ep-card";
+    card.dataset.episodeId = e.id;
+    card.onclick = ()=>STUDIO.openEpisode(e.id);
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        <h3>${esc(e.name)}</h3>${badge(e.status)}
+      </div>
+      <div class="meta">
+        ${e.recorded_at?`<span>Recorded ${fmtDate(e.recorded_at)}</span>`:""}
+        ${e.duration_seconds?`<span>${fmtDur(e.duration_seconds)}</span>`:""}
+        ${e.folder_path?`<span>${esc(e.folder_path)}</span>`:""}
+      </div>
+      <div class="counts">
+        <span class="count-pill">🎬 <b>${e.status==="ready"?"Episode ready":"Episode"}</b></span>
+        <span class="count-pill">📱 <b>${e.reels}</b> reels</span>
+        <span class="count-pill">✍️ <b>${e.posts}</b> posts</span>
+      </div>`;
+    grid.appendChild(card);
+  }
+  mirror();
+}
+
+function renderDetail(){
+  const d = state.detail; if(!d) return;
+  const e = d.episode;
+  $("dName").textContent = e.name;
+  $("dStatus").innerHTML = badge(e.status);
+  $("dMeta").innerHTML = [
+    e.recorded_at?`Recorded ${fmtDate(e.recorded_at)}`:"",
+    e.duration_seconds?fmtDur(e.duration_seconds):"",
+    e.produced_at?`Produced ${fmtDate(e.produced_at)}`:"",
+  ].filter(Boolean).map(esc).join(" · ");
+  $("dError").innerHTML = e.error ? `<div class="err">${esc(e.error)}</div>` : "";
+
+  const actions = [];
+  if(e.share_url) actions.push(`<a href="${esc(e.share_url)}" target="_blank" rel="noopener"><button class="primary">▶ Watch episode</button></a>`);
+  if(e.download_url) actions.push(`<a href="${esc(e.download_url)}" target="_blank" rel="noopener"><button>⬇ Download video</button></a>`);
+  if(e.status==="new"||e.status==="failed") actions.push(`<button class="primary" onclick="STUDIO.produce()">✨ Produce this episode</button>`);
+  if(e.project_url) actions.push(`<a href="${esc(e.project_url)}" target="_blank" rel="noopener"><button>Open in Descript (edit yourself)</button></a>`);
+  $("dActions").innerHTML = actions.join(" ");
+
+  const active = (d.jobs||[]).find(j=>!["done","failed","cancelled"].includes(j.step));
+  $("dProgress").textContent = active ? currentActivityLabel(active) : "";
+
+  // reels
+  const rg = $("reelGrid"); rg.innerHTML = "";
+  $("tabReelsN").textContent = d.reels.length ? `(${d.reels.filter(r=>r.status==="ready").length}/${d.reels.length})` : "";
+  $("reelEmpty").style.display = d.reels.length ? "none" : "";
+  for(const r of d.reels){
+    const div = document.createElement("div");
+    div.className = "reel"; div.dataset.reelId = r.id;
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px"><h4>${esc(r.title||"Reel")}</h4>${badge(r.status)}</div>
+      <div class="actions">
+        ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener">▶ Watch</a>`:`<span class="dis note">rendering…</span>`}
+        ${r.download_url?`<a href="${esc(r.download_url)}" target="_blank" rel="noopener">⬇ Download</a>`:""}
+      </div>`;
+    rg.appendChild(div);
+  }
+
+  // posts
+  const pl = $("postList"); pl.innerHTML = "";
+  $("tabPostsN").textContent = d.posts.length ? `(${d.posts.length})` : "";
+  $("postEmpty").style.display = d.posts.length ? "none" : "";
+  if(e.posts_status==="generating") $("postEmpty").textContent = "Writing your posts now — check back in a minute.";
+  for(const p of d.posts){
+    const div = document.createElement("div");
+    div.className = "post"; div.dataset.postId = p.id;
+    div.innerHTML = `
+      <div class="hook">${esc(p.hook||"")}</div>
+      <pre>${esc(p.body)}</pre>
+      ${p.first_comment?`<div class="fc"><b>First comment:</b> ${esc(p.first_comment)}</div>`:""}
+      <button onclick="STUDIO.copyPost('${p.id}')">Copy post</button>`;
+    pl.appendChild(div);
+  }
+
+  // assistant
+  const log = $("chatLog"); log.innerHTML = "";
+  for(const c of d.commands){
+    const you = document.createElement("div");
+    you.className = "msg you";
+    you.innerHTML = `<div class="who">You${c.target?` → ${esc(c.target)}`:""}</div>${esc(c.text)}`;
+    log.appendChild(you);
+    const ai = document.createElement("div");
+    ai.className = "msg ai";
+    ai.innerHTML = `<div class="who">AI editor ${badge(c.status)}</div>${esc(c.agent_response || (c.status==="working"?"Working on it — this can take a few minutes…":""))}`;
+    log.appendChild(ai);
+  }
+  log.scrollTop = log.scrollHeight;
+  const sel = $("chatTarget");
+  sel.innerHTML = `<option value="">Whole project</option>` +
+    (e.status==="ready"?`<option value="main">Main episode</option>`:"") +
+    d.reels.filter(r=>r.composition_id).map(r=>`<option value="${esc(r.composition_id)}">${esc(r.title||"Reel")}</option>`).join("");
+
+  // activity
+  const jl = $("jobList");
+  jl.innerHTML = (d.jobs||[]).map(j=>{
+    const label = {produce_main:"Produce episode", make_reels:"Create reels", generate_posts:"Write LinkedIn posts", command:"Your request"}[j.kind]||j.kind;
+    return `<div><span class="t">${esc(new Date(j.created_at).toLocaleString())}</span> <span>${esc(label)}</span> ${badge(j.step)} ${j.error?`<span class="note">${esc(j.error)}</span>`:""}</div>`;
+  }).join("") || `<div class="note">Nothing yet.</div>`;
+
+  mirror();
+}
+
+function currentActivityLabel(job){
+  const prog = job.result?.progress;
+  const pct = prog?.percent!=null ? ` (${Math.round(prog.percent)}%)` : "";
+  const what = {produce_main:"Producing the episode", make_reels:"Creating your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request"}[job.kind]||"Working";
+  const stage = job.step==="publishing" ? " — rendering video" : (prog?.label?` — ${prog.label}`:"");
+  return `${what}${stage}${pct}. This runs in the background; the page updates automatically.`;
+}
+
+// ---------- polling ----------
+function schedulePoll(){
+  clearTimeout(state.pollTimer);
+  const busyDetail = state.detail && ((state.detail.jobs||[]).some(j=>!["done","failed","cancelled"].includes(j.step)) || state.detail.episode.posts_status==="generating");
+  const busyList = state.episodes.some(e=>e.status==="producing");
+  const ms = (busyDetail||busyList) ? 15000 : 60000;
+  state.pollTimer = setTimeout(async ()=>{
+    try{
+      if(state.episodeId){ state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); }
+      else { const o = await api("/api/overview"); state.client=o.client; state.episodes=o.episodes; renderList(); }
+    }catch{}
+    schedulePoll();
+  }, ms);
+}
+
+// ---------- agent-friendly API ----------
+window.STUDIO = {
+  describe(){ return "Podcast Studio dashboard. State mirror in #studio-data. Methods: login, openEpisode(id), backToList, setTab(name), produce, makeReels, makePosts, sendCommand, copyPost(id), refresh."; },
+  getState(){ return JSON.parse($("studio-data").textContent); },
+
+  async login(){
+    const key = $("keyInput").value.trim();
+    if(!key) return toast("Paste your access key first");
+    state.key = key;
+    try{
+      const o = await api("/api/overview");
+      localStorage.setItem("ps_key", key);
+      const u = new URL(location); u.searchParams.set("key", key); history.replaceState(null,"",u);
+      state.client=o.client; state.episodes=o.episodes;
+      show("listView"); renderList(); schedulePoll();
+    }catch(e){ state.key=null; toast(e.message==="invalid_key"?"That key was not recognised":e.message); }
+  },
+
+  async openEpisode(id){
+    state.episodeId = id; state.tab = "reels";
+    try{ state.detail = await api(`/api/episode?id=${id}`); }
+    catch(e){ return toast(e.message); }
+    show("detailView"); this.setTab("reels"); renderDetail(); schedulePoll();
+  },
+
+  backToList(){ state.episodeId=null; state.detail=null; show("listView"); this.refresh(); },
+
+  setTab(name){
+    state.tab = name;
+    for(const b of document.querySelectorAll(".tabs button")) b.classList.toggle("active", b.dataset.tab===name);
+    for(const t of ["reels","posts","assistant","activity"]) $("tab-"+t).style.display = t===name ? "" : "none";
+    mirror();
+  },
+
+  async refresh(){
+    try{
+      const o = state.episodeId ? null : await api("/api/overview");
+      if(o){ state.client=o.client; state.episodes=o.episodes; renderList(); }
+    }catch(e){ toast(e.message); }
+  },
+
+  async checkNew(){
+    const btn = $("refreshBtn"); btn.disabled=true; btn.textContent="Checking…";
+    try{
+      const r = await api("/api/refresh",{method:"POST",body:"{}"});
+      state.client=r.client; state.episodes=r.episodes; renderList();
+      toast(r.added ? `${r.added} new recording${r.added>1?"s":""} found` : "You're up to date");
+    }catch(e){ toast(e.message); }
+    btn.disabled=false; btn.textContent="↻ Check for new recordings";
+  },
+
+  async produce(){
+    if(!state.episodeId) return;
+    try{
+      await api("/api/produce",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
+      toast("Production started — the AI is editing your episode now");
+      state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
+    }catch(e){ toast(e.message); }
+  },
+
+  async makeReels(){
+    if(!state.episodeId) return;
+    const btn=$("reelsBtn"); btn.disabled=true;
+    try{
+      await api("/api/reels",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
+      toast("Reel creation started");
+      state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
+    }catch(e){ toast(e.message); }
+    btn.disabled=false;
+  },
+
+  async makePosts(){
+    if(!state.episodeId) return;
+    const btn=$("postsBtn"); btn.disabled=true;
+    try{
+      await api("/api/posts",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
+      toast("Writing a fresh set of posts…");
+      state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
+    }catch(e){ toast(e.message); }
+    btn.disabled=false;
+  },
+
+  async sendCommand(){
+    const text = $("chatInput").value.trim();
+    if(!text) return;
+    const target = $("chatTarget").value || undefined;
+    const btn=$("chatSend"); btn.disabled=true;
+    try{
+      await api("/api/command",{method:"POST",body:JSON.stringify({episode_id:state.episodeId,text,target})});
+      $("chatInput").value="";
+      state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
+    }catch(e){ toast(e.message); }
+    btn.disabled=false;
+  },
+
+  copyPost(id){
+    const p = (state.detail?.posts||[]).find(x=>x.id===id);
+    if(!p) return;
+    navigator.clipboard.writeText(p.body).then(()=>toast("Post copied — paste it into LinkedIn"));
+  },
+};
+
+$("refreshBtn").onclick = ()=>STUDIO.checkNew();
+$("chatInput").addEventListener("keydown", e=>{ if(e.key==="Enter" && (e.metaKey||e.ctrlKey)) STUDIO.sendCommand(); });
+$("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.login(); });
+
+// boot
+(async function(){
+  const urlKey = new URL(location).searchParams.get("key");
+  const key = urlKey || localStorage.getItem("ps_key");
+  if(!key){ show("loginView"); return; }
+  state.key = key;
+  try{
+    const o = await api("/api/overview");
+    localStorage.setItem("ps_key", key);
+    state.client=o.client; state.episodes=o.episodes;
+    show("listView"); renderList(); schedulePoll();
+  }catch(e){
+    localStorage.removeItem("ps_key");
+    state.key=null; show("loginView");
+    if(urlKey) toast("That link is no longer valid — paste your access key");
+  }
+})();
+</script>
+</body>
+</html>
