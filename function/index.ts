@@ -196,7 +196,7 @@ async function failJob(job: any, err: unknown) {
   const msg = humanDscError(err);
   await updateJob(job.id, { step: "failed", error: msg });
   await logEvent("job_failed", { job_id: job.id, kind: job.kind, error: msg });
-  if (job.kind === "produce_main" && job.episode_id) {
+  if ((job.kind === "produce_main" || job.kind === "import") && job.episode_id) {
     await supabase.from("ps_episodes").update({ status: "failed", error: msg }).eq("id", job.episode_id);
   }
   if (job.kind === "generate_posts" && job.episode_id) {
@@ -355,6 +355,21 @@ async function advanceJob(job: any, dscStatus: any | null) {
     if (state === "cancelled") { await failJob(job, new Error("The editing job was cancelled in Descript.")); return; }
     const r = dscStatus.result ?? {};
     const failed = r.status === "error" || r.status === "failed";
+
+    // ----- import job finished (dashboard upload) -----
+    if (job.step === "waiting_import") {
+      if (failed) { await failJob(job, new Error(r.error_message || "Importing the recording failed.")); return; }
+      const first: any = Object.values(r.media_status ?? {})[0] ?? null;
+      if (first?.status === "failed") { await failJob(job, new Error(first.error_message || "The file could not be processed.")); return; }
+      if (job.episode_id) {
+        await supabase.from("ps_episodes").update({
+          status: "new", duration_seconds: first?.duration_seconds ?? null, error: null,
+        }).eq("id", job.episode_id);
+      }
+      await updateJob(job.id, { step: "done", media_seconds_used: r.media_seconds_used ?? null });
+      if (client.auto_produce && job.episode_id) await enqueue(job.client_id, job.episode_id, "produce_main");
+      return;
+    }
 
     // ----- agent job finished -----
     if (job.step === "agent_running") {
@@ -612,7 +627,8 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   // Path after the function name: /studio/api/overview → /api/overview
   const path = url.pathname.replace(/^\/studio/, "") || "/";
-  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  // /api/upload carries the raw file as its body — everything else is JSON.
+  const body = req.method === "POST" && path !== "/api/upload" ? await req.json().catch(() => ({})) : {};
 
   try {
     // ----- machine endpoints -----
@@ -719,10 +735,54 @@ Deno.serve(async (req) => {
         return json({ ok: true, ...r, ...(await apiOverview(client)) });
       }
 
+      if (path === "/api/upload" && req.method === "POST") {
+        if (!client.descript_token) return json({ error: "Descript is not connected yet." }, 400);
+        const rawName = (url.searchParams.get("name") || "Recording").slice(0, 120);
+        const ctype = url.searchParams.get("type") || "application/octet-stream";
+        const clean = rawName.replace(/[^\w\-. ()]/g, " ").replace(/\s+/g, " ").trim() || "Recording";
+        const extMatch = clean.match(/\.(\w{2,5})$/);
+        const ext = (extMatch?.[1] || (ctype.split("/")[1] ?? "mp4")).toLowerCase();
+        const base = extMatch ? clean.slice(0, -(ext.length + 1)) : clean;
+        const mediaKey = `${base}.${ext}`;
+        const projName = `${base} — ${new Date().toISOString().slice(0, 10)}`;
+        const buf = await req.arrayBuffer();
+        if (!buf.byteLength) return json({ error: "The file arrived empty — try again." }, 400);
+        if (buf.byteLength > 100 * 1024 * 1024) return json({ error: "Files up to 100 MB can be uploaded here. For bigger recordings, use Record in Descript." }, 400);
+        const secret = (await cfg("webhook_secret"))!;
+        const { data: jb, error: jbErr } = await supabase.from("ps_jobs").insert({
+          client_id: client.id, episode_id: null, kind: "import", step: "waiting_import", payload: { name: projName },
+        }).select().single();
+        if (jbErr || !jb) return json({ error: jbErr?.message ?? "job_insert_failed" }, 500);
+        let imp: any;
+        try {
+          imp = await dsc(client.descript_token, "POST", "/jobs/import/project_media", {
+            project_name: projName,
+            add_media: { [mediaKey]: { content_type: ctype, file_size: buf.byteLength } },
+            add_compositions: [{ name: projName, clips: [{ media: mediaKey }] }],
+            callback_url: callbackUrlFor(jb.id, secret),
+          });
+        } catch (e) { await failJob(jb, e); return json({ error: humanDscError(e) }, 400); }
+        const upUrl = imp.upload_urls?.[mediaKey]?.upload_url;
+        if (!upUrl) { await failJob(jb, new Error("Descript did not return an upload URL.")); return json({ error: "upload_init_failed" }, 500); }
+        const { data: ep } = await supabase.from("ps_episodes").upsert({
+          client_id: client.id, descript_project_id: imp.project_id, name: projName,
+          status: "importing", project_url: imp.project_url ?? null,
+          descript_created_at: new Date().toISOString(),
+        }, { onConflict: "client_id,descript_project_id" }).select().single();
+        await updateJob(jb.id, { episode_id: ep?.id ?? null, descript_job_id: imp.job_id });
+        const put = await fetch(upUrl, { method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: buf });
+        if (!put.ok) {
+          await failJob({ ...jb, episode_id: ep?.id ?? null }, new Error(`Sending the file to the editor failed (${put.status}). Try again.`));
+          return json({ error: "upload_failed" }, 502);
+        }
+        return json({ ok: true, episode_id: ep?.id ?? null });
+      }
+
       if (path === "/api/produce" && req.method === "POST") {
         const { episode_id } = body;
         const { data: ep } = await supabase.from("ps_episodes").select("*").eq("id", episode_id).eq("client_id", client.id).maybeSingle();
         if (!ep) return json({ error: "not_found" }, 404);
+        if (ep.status === "importing") return json({ error: "This recording is still importing — give it a minute." }, 409);
         const { data: running } = await supabase.from("ps_jobs").select("id").eq("episode_id", ep.id)
           .eq("kind", "produce_main").not("step", "in", "(done,failed,cancelled)").limit(1);
         if (running?.length) return json({ error: "This episode is already being produced." }, 409);

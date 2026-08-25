@@ -29,7 +29,7 @@ header .spacer{flex:1}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
 .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
 .badge.ready{background:var(--ok-soft);color:var(--ok)}
-.badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending{background:var(--warn-soft);color:var(--warn)}
+.badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending,.badge.importing{background:var(--warn-soft);color:var(--warn)}
 .badge.new{background:var(--info-soft);color:var(--info)}
 .badge.failed{background:var(--bad-soft);color:var(--bad)}
 .badge.none,.badge.draft{background:#eeecf5;color:var(--muted)}
@@ -92,6 +92,8 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
     </div>
     <div class="spacer"></div>
     <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener" style="display:none"><button class="primary">🎙 Record in Descript</button></a>
+    <button id="uploadBtn" style="display:none">⬆ Upload recording</button>
+    <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
     <button id="refreshBtn" style="display:none">↻ Check for new recordings</button>
   </header>
 
@@ -111,7 +113,8 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
     <div class="grid" id="epGrid"></div>
     <div class="empty" id="epEmpty" style="display:none">
       No recordings found yet.<br><br>
-      Hit “🎙 Record in Descript” above to record your podcast or webinar — it appears here automatically when you're done.
+      Hit “🎙 Record in Descript” to record your podcast or webinar — it appears here automatically when you're done.<br>
+      Already have a recording (Zoom, phone, anywhere)? “⬆ Upload recording” drops it straight in.
     </div>
   </div>
 
@@ -197,7 +200,7 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("sho
 function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtDate(d){ if(!d) return ""; try{ return new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});}catch{return "";} }
 function fmtDur(s){ if(!s) return ""; s=Math.round(s); const m=Math.floor(s/60); return m>=60? `${Math.floor(m/60)}h ${m%60}m` : `${m}m ${s%60}s`; }
-function badge(status){ const label={new:"New recording",producing:"Producing…",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing…",pending:"Queued",publishing:"Rendering…",working:"Working…",done:"Done",draft:"Draft"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
+function badge(status){ const label={new:"New recording",producing:"Producing…",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing…",pending:"Queued",publishing:"Rendering…",working:"Working…",done:"Done",draft:"Draft",importing:"Importing…"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
 
 async function api(path, opts={}){
   const url = new URL(API + path);
@@ -215,6 +218,7 @@ function show(view){
   for(const v of ["loginView","listView","detailView"]) $(v).style.display = v===view ? "" : "none";
   $("refreshBtn").style.display = view==="listView" ? "" : "none";
   $("recordBtn").style.display = view==="listView" ? "" : "none";
+  $("uploadBtn").style.display = view==="listView" ? "" : "none";
 }
 
 function renderHeader(){
@@ -460,9 +464,36 @@ window.STUDIO = {
     if(!p) return;
     navigator.clipboard.writeText(p.body).then(()=>toast("Post copied — paste it into LinkedIn"));
   },
+
+  uploadFile(file){
+    if(!file) return;
+    if(file.size > 100*1024*1024) return toast("Files up to 100 MB can be uploaded here. Bigger recordings: use Record in Descript.");
+    const btn = $("uploadBtn"); btn.disabled = true;
+    const u = new URL(API + "/api/upload");
+    u.searchParams.set("key", state.key);
+    u.searchParams.set("name", file.name);
+    u.searchParams.set("type", file.type || "application/octet-stream");
+    u.searchParams.set("size", String(file.size));
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", u);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.upload.onprogress = e=>{ if(e.lengthComputable) btn.textContent = `Uploading… ${Math.round(e.loaded/e.total*100)}%`; };
+    xhr.onload = ()=>{
+      btn.disabled = false; btn.textContent = "⬆ Upload recording";
+      let r = {}; try{ r = JSON.parse(xhr.responseText); }catch{}
+      if(xhr.status >= 200 && xhr.status < 300 && r.ok){
+        toast("Uploaded — transcribing now. It will show as ready to produce in a few minutes.");
+        STUDIO.refresh();
+      } else toast(r.error || "Upload failed — try again.");
+    };
+    xhr.onerror = ()=>{ btn.disabled = false; btn.textContent = "⬆ Upload recording"; toast("Upload failed — check your connection and try again."); };
+    xhr.send(file);
+  },
 };
 
 $("refreshBtn").onclick = ()=>STUDIO.checkNew();
+$("uploadBtn").onclick = ()=>$("uploadInput").click();
+$("uploadInput").addEventListener("change", e=>{ STUDIO.uploadFile(e.target.files[0]); e.target.value=""; });
 $("chatInput").addEventListener("keydown", e=>{ if(e.key==="Enter" && (e.metaKey||e.ctrlKey)) STUDIO.sendCommand(); });
 $("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.login(); });
 
