@@ -20,7 +20,7 @@ All async work is a state machine in `ps_jobs` (`queued → agent_running → pu
 
 ## Repo layout
 
-- `site/index.html` — the whole dashboard (static, GitHub Pages). Agent-friendly: `window.STUDIO` methods + state mirror in `<script id="studio-data">`.
+- `index.html` — the whole dashboard (static, GitHub Pages). Agent-friendly: `window.STUDIO` methods + state mirror in `<script id="studio-data">`.
 - `function/index.ts` — the whole backend (deploy as Supabase edge function `studio`, `verify_jwt=false`). Before deploying, run the tsc stub check (edge deploys do NOT typecheck).
 - `sql/001_init.sql` — schema.
 - `docs/descript-capabilities.md` — what the Descript API can and cannot do (source material for the client-facing two-pager).
