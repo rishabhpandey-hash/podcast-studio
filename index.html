@@ -224,6 +224,9 @@ select option{background:#fff;color:var(--ink)}
 .rec-audio-note{background:var(--panel-2);border:1px solid var(--line);border-radius:15px;padding:36px 14px;text-align:center;color:var(--muted)}
 .guest-tip{background:var(--info-soft);border:1px solid #d9d6f7;border-radius:14px;padding:13px 16px;font-size:13.5px;color:var(--muted);line-height:1.55}
 .guest-tip b{color:var(--info)}
+#guestModal{position:fixed;inset:0;background:rgba(6,3,14,.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.roomline{display:flex;gap:8px}
+.roomline input{flex:1;padding:11px 13px;font-size:13.5px;color:var(--muted)}
 .rec-live{color:var(--bad);font-weight:800}
 
 footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
@@ -245,7 +248,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <button id="recHereBtn" class="primary" onclick="STUDIO.openRecorder()">⏺ Record here</button>
       <button id="uploadBtn">⬆ Upload</button>
       <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
-      <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener"><button title="Record with guests: create a Room or SquadCast session in Descript — guests join by link, the recording lands here automatically">🎧 With guests</button></a>
+      <button id="recordBtn" title="Record with guests — share your studio room link" onclick="STUDIO.openGuest()">🎧 With guests</button>
       <button id="refreshBtn" title="Check for new recordings">↻</button>
       <button id="signOutBtn" title="Sign out" style="display:none" onclick="STUDIO.signOut()">⎋</button>
     </div>
@@ -404,8 +407,35 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
     </div>
     <p class="note" style="margin:0">This records <b>you</b> (solo) — camera up to ~10 minutes here, audio-only much longer.</p>
     <div class="guest-tip">
-      <b>🎧 Recording with a guest?</b> Use a Descript Room or SquadCast session — send the guest the invite link (they don't need an account), record together in studio quality, and the recording appears on this dashboard automatically when you're done.
-      <div style="margin-top:10px"><a href="https://web.descript.com" target="_blank" rel="noopener"><button>Open Descript → New Room / SquadCast</button></a></div>
+      <b>🎧 Recording with a guest?</b> Close this and hit “With guests” — share your studio room link, record together in studio quality, and the session appears on this dashboard automatically.
+    </div>
+  </div>
+</div>
+
+<div id="guestModal" style="display:none">
+  <div class="rec-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0;font-size:19px">Record with guests</h2>
+      <button class="back" onclick="STUDIO.closeGuest()">✕ Close</button>
+    </div>
+    <div id="guestHasRoom" style="display:none">
+      <p class="note" style="margin-top:0">Your studio room. Send this link to your guest — <b>no account needed</b>, it works on every session, and the recording lands on this dashboard automatically when you finish.</p>
+      <div class="roomline">
+        <input id="roomLinkShow" readonly>
+        <button class="primary" onclick="STUDIO.copyRoom()">Copy link</button>
+      </div>
+      <div class="rec-row" style="margin-top:12px">
+        <a id="openRoomBtn" href="#" target="_blank" rel="noopener"><button>🎙 Enter the room</button></a>
+        <button class="back" style="font-size:13px" onclick="STUDIO.editRoom()">Change room link</button>
+      </div>
+    </div>
+    <div id="guestNoRoom" style="display:none">
+      <p class="note" style="margin-top:0"><b>One-time setup:</b> create your studio room in Descript (New → Room, or a SquadCast session), copy its invite link, and save it here. Room links never expire — after this, sharing is one click from this dashboard.</p>
+      <div class="rec-row"><a href="https://web.descript.com" target="_blank" rel="noopener"><button>1 · Create your room in Descript</button></a></div>
+      <div class="roomline" style="margin-top:10px">
+        <input id="roomLinkInput" placeholder="2 · Paste the room invite link here…">
+        <button class="primary" id="roomSaveBtn" onclick="STUDIO.saveRoom()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -800,6 +830,38 @@ window.STUDIO = {
   },
 
   suggest(text){ $("chatInput").value = text; $("chatInput").focus(); },
+
+  // ---- guest room sharing ----
+  openGuest(){
+    const hasRoom = !!state.client?.room_url;
+    $("guestModal").style.display = "flex";
+    $("guestHasRoom").style.display = hasRoom ? "" : "none";
+    $("guestNoRoom").style.display = hasRoom ? "none" : "";
+    if(hasRoom){
+      $("roomLinkShow").value = state.client.room_url;
+      $("openRoomBtn").href = state.client.room_url;
+    }
+  },
+  closeGuest(){ $("guestModal").style.display = "none"; },
+  editRoom(){
+    $("guestHasRoom").style.display = "none"; $("guestNoRoom").style.display = "";
+    $("roomLinkInput").value = state.client?.room_url || "";
+  },
+  copyRoom(){
+    navigator.clipboard.writeText(state.client.room_url).then(()=>toast("Invite link copied — send it to your guest"));
+  },
+  async saveRoom(){
+    const url = $("roomLinkInput").value.trim();
+    if(!url) return toast("Paste your room's invite link first");
+    const btn = $("roomSaveBtn"); btn.disabled = true;
+    try{
+      const r = await api("/api/room",{method:"POST",body:JSON.stringify({url})});
+      state.client.room_url = r.room_url;
+      toast("Room saved — sharing is now one click");
+      this.openGuest();
+    }catch(e){ toast(e.message); }
+    btn.disabled = false;
+  },
 
   async sendCommand(){
     const text = $("chatInput").value.trim();

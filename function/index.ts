@@ -642,7 +642,7 @@ async function apiOverview(client: any) {
     for (const p of posts ?? []) postCounts[p.episode_id] = (postCounts[p.episode_id] ?? 0) + 1;
   }
   return {
-    client: { name: client.name, logo_url: client.logo_url, connected: !!client.descript_token, auto_produce: client.auto_produce },
+    client: { name: client.name, logo_url: client.logo_url, connected: !!client.descript_token, auto_produce: client.auto_produce, room_url: client.room_url ?? null },
     episodes: (episodes ?? []).map((e: any) => ({ ...episodePublic(e), reels: reelCounts[e.id] ?? 0, posts: postCounts[e.id] ?? 0 })),
   };
 }
@@ -735,7 +735,7 @@ Deno.serve(async (req) => {
       if (path === "/admin/clients/update" && req.method === "POST") {
         const { client_id, ...fields } = body;
         if (!client_id) return json({ error: "client_id required" }, 400);
-        const allowed = ["name", "logo_url", "target_audience", "brand_notes", "reel_count", "auto_produce", "active", "descript_model", "descript_token"];
+        const allowed = ["name", "logo_url", "target_audience", "brand_notes", "reel_count", "auto_produce", "active", "descript_model", "descript_token", "room_url"];
         const patch: Record<string, unknown> = {};
         for (const k of allowed) if (k in fields) patch[k] = fields[k];
         if (typeof patch.descript_token === "string" && patch.descript_token) {
@@ -784,6 +784,23 @@ Deno.serve(async (req) => {
       if (path === "/api/episode" && req.method === "GET") {
         const detail = await apiEpisode(client, url.searchParams.get("id") ?? "");
         return detail ? json(detail) : json({ error: "not_found" }, 404);
+      }
+
+      // Save this client's standing Descript Room / SquadCast link (one-time; Rooms links are persistent).
+      if (path === "/api/room" && req.method === "POST") {
+        const raw = String(body?.url ?? "").trim();
+        if (raw === "") {
+          await supabase.from("ps_clients").update({ room_url: null }).eq("id", client.id);
+          return json({ ok: true, room_url: null });
+        }
+        let u: URL;
+        try { u = new URL(raw); } catch { return json({ error: "That doesn't look like a link." }, 400); }
+        const host = u.hostname.toLowerCase();
+        const okHost = u.protocol === "https:" && (host === "descript.com" || host.endsWith(".descript.com") || host === "squadcast.fm" || host.endsWith(".squadcast.fm"));
+        if (!okHost) return json({ error: "Paste a Descript Rooms or SquadCast link (descript.com / squadcast.fm)." }, 400);
+        if (raw.length > 500) return json({ error: "Link too long." }, 400);
+        await supabase.from("ps_clients").update({ room_url: raw }).eq("id", client.id);
+        return json({ ok: true, room_url: raw });
       }
 
       if (path === "/api/refresh" && req.method === "POST") {
