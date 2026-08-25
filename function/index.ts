@@ -207,6 +207,15 @@ async function failJob(job: any, err: unknown) {
   }
 }
 
+// Atomic step claim — cron ticks can overlap (a slow tick + the next one, or a tick
+// + a Descript callback), so every state transition must be won exactly once.
+async function claim(jobId: string, from: string, to: string): Promise<boolean> {
+  const { data } = await supabase.from("ps_jobs")
+    .update({ step: to, updated_at: new Date().toISOString() })
+    .eq("id", jobId).eq("step", from).select("id");
+  return !!(data && data.length);
+}
+
 async function enqueue(client_id: string, episode_id: string | null, kind: string, payload: Record<string, unknown> = {}) {
   const { data, error } = await supabase.from("ps_jobs")
     .insert({ client_id, episode_id, kind, step: "queued", payload })
@@ -291,6 +300,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
     // ----- start queued jobs -----
     if (job.step === "queued") {
       if (!episode) { await failJob(job, new Error("episode missing")); return; }
+      if (!(await claim(job.id, "queued", "starting"))) return; // someone else is starting it
 
       if (job.kind === "produce_main") {
         await supabase.from("ps_episodes").update({ status: "producing", error: null }).eq("id", episode.id);
@@ -359,6 +369,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
     // ----- import job finished (dashboard upload) -----
     if (job.step === "waiting_import") {
       if (failed) { await failJob(job, new Error(r.error_message || "Importing the recording failed.")); return; }
+      if (!(await claim(job.id, "waiting_import", "finalizing_import"))) return;
       const first: any = Object.values(r.media_status ?? {})[0] ?? null;
       if (first?.status === "failed") { await failJob(job, new Error(first.error_message || "The file could not be processed.")); return; }
       if (job.episode_id) {
@@ -374,6 +385,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
     // ----- agent job finished -----
     if (job.step === "agent_running") {
       if (failed) { await failJob(job, new Error(r.error_message || "The AI editor could not complete this request.")); return; }
+      if (!(await claim(job.id, "agent_running", "advancing"))) return;
       await updateJob(job.id, {
         ai_credits_used: r.ai_credits_used ?? null,
         result: { agent_response: r.agent_response, project_changed: r.project_changed },
@@ -443,6 +455,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
         await updateJob(job.id, { payload: { ...job.payload, download_retries: retries + 1 } });
         return;
       }
+      if (!(await claim(job.id, "publishing", "finishing"))) return;
       const compId = (job.payload?.publishing_composition_id as string) || r.composition_id;
       const urls = {
         share_url: r.share_url ?? null,
@@ -506,12 +519,27 @@ async function advanceJob(job: any, dscStatus: any | null) {
       return;
     }
   } catch (e) {
-    // 429s and transient errors: leave the job in place; the next cron tick retries.
+    // 429s and transient errors: release any claim so the next cron tick retries.
     if (e instanceof DscError && e.status === 429) {
+      await supabase.from("ps_jobs").update({ step: job.step })
+        .eq("id", job.id).in("step", ["starting", "advancing", "finishing", "finalizing_import"]);
       await logEvent("rate_limited", { job_id: job.id });
       return;
     }
     await failJob(job, e);
+  }
+}
+
+// A worker that died mid-transition leaves a job stuck in a claim state — return
+// it to its base state after 10 quiet minutes so the pipeline self-heals.
+// (10, not 5: a legitimate posts-writing claim can run several minutes.)
+async function recoverStuckClaims() {
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const backTo: Record<string, string> = {
+    starting: "queued", advancing: "agent_running", finishing: "publishing", finalizing_import: "waiting_import",
+  };
+  for (const [claimed, base] of Object.entries(backTo)) {
+    await supabase.from("ps_jobs").update({ step: base }).eq("step", claimed).lt("updated_at", cutoff);
   }
 }
 
@@ -552,8 +580,9 @@ async function discoverClient(client: any): Promise<{ found: number; added: numb
 // ---------- cron tick ----------
 async function cronTick(): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
+  await recoverStuckClaims();
   const { data: jobs } = await supabase.from("ps_jobs").select("*")
-    .not("step", "in", "(done,failed,cancelled)")
+    .in("step", ["queued", "agent_running", "publishing", "waiting_import"])
     .order("created_at", { ascending: true }).limit(20);
   out.active_jobs = jobs?.length ?? 0;
   for (const job of jobs ?? []) {
