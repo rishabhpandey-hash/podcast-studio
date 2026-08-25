@@ -92,11 +92,26 @@ function humanDscError(e: unknown): string {
 }
 
 // ---------- auth ----------
-async function clientFromKey(req: Request, url: URL) {
+// Two ways in: a per-client access key (external clients) or a Supabase Auth
+// magic-link session (team members whitelisted in ps_users).
+async function resolveClient(req: Request, url: URL): Promise<{ client: any; email?: string; is_admin?: boolean } | null> {
   const key = url.searchParams.get("key") || req.headers.get("x-access-key") || "";
-  if (!key) return null;
-  const { data } = await supabase.from("ps_clients").select("*").eq("access_key", key).eq("active", true).maybeSingle();
-  return data ?? null;
+  if (key) {
+    const { data } = await supabase.from("ps_clients").select("*").eq("access_key", key).eq("active", true).maybeSingle();
+    if (data) return { client: data };
+  }
+  const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (jwt) {
+    const { data: u } = await supabase.auth.getUser(jwt);
+    const email = u?.user?.email?.toLowerCase();
+    if (email) {
+      const { data: memb } = await supabase.from("ps_users").select("*, ps_clients(*)").eq("email", email).maybeSingle();
+      if (memb?.ps_clients && memb.ps_clients.active) {
+        return { client: memb.ps_clients, email, is_admin: !!memb.is_admin };
+      }
+    }
+  }
+  return null;
 }
 async function isAdmin(req: Request, url: URL): Promise<boolean> {
   const secret = req.headers.get("x-admin-secret") || url.searchParams.get("admin_secret") || "";
@@ -746,10 +761,23 @@ Deno.serve(async (req) => {
       return json({ error: "not_found" }, 404);
     }
 
+    // Pre-login whitelist check so the UI can say "no access" before sending an email.
+    if (path === "/auth/allowed" && req.method === "POST") {
+      const email = String(body?.email ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) return json({ allowed: false });
+      const { data } = await supabase.from("ps_users").select("email").eq("email", email).maybeSingle();
+      return json({ allowed: !!data });
+    }
+
     // ----- client API -----
     if (path.startsWith("/api/")) {
-      const client = await clientFromKey(req, url);
-      if (!client) return json({ error: "invalid_key" }, 401);
+      const authn = await resolveClient(req, url);
+      if (!authn) return json({ error: "invalid_key" }, 401);
+      const client = authn.client;
+
+      if (path === "/api/whoami" && req.method === "GET") {
+        return json({ client: client.name, email: authn.email ?? null, is_admin: !!authn.is_admin });
+      }
 
       if (path === "/api/overview" && req.method === "GET") return json(await apiOverview(client));
 

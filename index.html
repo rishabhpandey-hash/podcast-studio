@@ -241,6 +241,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
       <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener"><button title="Record long multi-guest sessions in Descript">🎙 Descript</button></a>
       <button id="refreshBtn" title="Check for new recordings">↻</button>
+      <button id="signOutBtn" title="Sign out" style="display:none" onclick="STUDIO.signOut()">⎋</button>
     </div>
   </div>
 </div>
@@ -249,9 +250,24 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
   <div id="loginView" class="login" style="display:none">
     <div class="mark">🎙</div>
     <h2 style="margin:0 0 6px">Welcome to your studio</h2>
-    <p class="note">Paste the access key you received from your account manager.</p>
-    <input id="keyInput" placeholder="your-access-key" autocomplete="off">
-    <button class="primary" style="width:100%" onclick="STUDIO.login()">Open my studio →</button>
+    <div id="loginEmailStep">
+      <p class="note">Enter your work email — we'll send you a sign-in link.</p>
+      <input id="emailInput" type="email" placeholder="you@company.com" autocomplete="email">
+      <button class="primary" style="width:100%" id="emailLoginBtn" onclick="STUDIO.emailLogin()">Email me a sign-in link →</button>
+      <p class="note" style="text-align:center;margin:16px 0 0"><a href="#" onclick="STUDIO.toggleKeyLogin(event)">Have an access key instead?</a></p>
+    </div>
+    <div id="loginSentStep" style="display:none">
+      <p style="font-size:15px">📬 <b>Check your inbox.</b></p>
+      <p class="note" id="sentTo"></p>
+      <p class="note">Click the link in the email and you'll land right back here, signed in. The link works once — request a new one if it expires.</p>
+      <p class="note" style="margin-top:16px"><a href="#" onclick="STUDIO.backToEmail(event)">← Use a different email</a></p>
+    </div>
+    <div id="loginKeyStep" style="display:none">
+      <p class="note">Paste the access key you received from your account manager.</p>
+      <input id="keyInput" placeholder="your-access-key" autocomplete="off">
+      <button class="primary" style="width:100%" onclick="STUDIO.login()">Open my studio →</button>
+      <p class="note" style="text-align:center;margin:16px 0 0"><a href="#" onclick="STUDIO.backToEmail(event)">← Sign in with email instead</a></p>
+    </div>
   </div>
 
   <div id="listView" style="display:none">
@@ -385,8 +401,12 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
 <div id="toast"></div>
 
 <script id="studio-data" type="application/json">{}</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const API = "https://mgnjlymtjmcoskqinhid.supabase.co/functions/v1/studio";
+const SUPA_URL = "https://mgnjlymtjmcoskqinhid.supabase.co";
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nbmpseW10am1jb3NrcWluaGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMzMxOTMsImV4cCI6MjEwMDgwOTE5M30.bFMe8wltqHkB7esG_eAYKhU20n2sjPSPp6cEmFoCrco";
+const sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, { auth: { flowType: "implicit", detectSessionInUrl: true } });
 
 const state = {
   key: null, client: null, episodes: [],
@@ -411,8 +431,11 @@ function coverCss(name){
 
 async function api(path, opts={}){
   const url = new URL(API + path);
-  url.searchParams.set("key", state.key);
-  const res = await fetch(url, { headers:{ "Content-Type":"application/json" }, ...opts });
+  const headers = { "Content-Type":"application/json" };
+  const { data: { session } } = await sb.auth.getSession();
+  if(session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+  else if(state.key) url.searchParams.set("key", state.key);
+  const res = await fetch(url, { ...opts, headers: { ...headers, ...(opts.headers||{}) } });
   const data = await res.json().catch(()=>({}));
   if(!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
@@ -426,6 +449,7 @@ function show(view){
   $("topbar").style.display = view==="loginView" ? "none" : "";
   const listOnly = view==="listView" ? "" : "none";
   for(const id of ["recHereBtn","uploadBtn","recordBtn","refreshBtn"]) $(id).style.display = listOnly;
+  $("signOutBtn").style.display = view!=="loginView" && state.viaEmail ? "" : "none";
 }
 
 function renderHeader(){
@@ -653,10 +677,38 @@ function schedulePoll(){
 
 // ---------- agent-friendly API ----------
 window.STUDIO = {
-  describe(){ return "Podcast Studio dashboard. State mirror in #studio-data. Methods: login, openEpisode(id), backToList, setTab(name), produce, makeReels, makePosts, sendCommand, suggest(text), copyPost(id), refresh, checkNew, openRecorder, uploadFile(file), setFilter(id), search(q)."; },
+  describe(){ return "Podcast Studio dashboard. State mirror in #studio-data. Methods: emailLogin, login (access key), signOut, openEpisode(id), backToList, setTab(name), produce, makeReels, makePosts, sendCommand, suggest(text), copyPost(id), refresh, checkNew, openRecorder, uploadFile(file), setFilter(id), search(q)."; },
   getState(){ return JSON.parse($("studio-data").textContent); },
   setFilter(id){ state.filter=id; state.limit=24; renderList(); },
   search(q){ state.q=q; $("epSearch").value=q; state.limit=24; renderList(); },
+
+  toggleKeyLogin(ev){ ev?.preventDefault(); $("loginEmailStep").style.display="none"; $("loginSentStep").style.display="none"; $("loginKeyStep").style.display=""; },
+  backToEmail(ev){ ev?.preventDefault(); $("loginKeyStep").style.display="none"; $("loginSentStep").style.display="none"; $("loginEmailStep").style.display=""; },
+
+  async emailLogin(){
+    const email = $("emailInput").value.trim().toLowerCase();
+    if(!email || !email.includes("@")) return toast("Enter your work email first");
+    const btn = $("emailLoginBtn"); btn.disabled = true; btn.textContent = "Checking…";
+    try{
+      const chk = await fetch(`${API}/auth/allowed`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ email }) }).then(r=>r.json());
+      if(!chk.allowed){ toast("This email doesn't have access yet — ask your account manager to add it."); return; }
+      btn.textContent = "Sending link…";
+      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+      if(error) throw error;
+      $("sentTo").textContent = `We sent a sign-in link to ${email}.`;
+      $("loginEmailStep").style.display = "none";
+      $("loginSentStep").style.display = "";
+    }catch(e){ toast(e.message || "Could not send the link — try again in a minute."); }
+    finally{ btn.disabled = false; btn.textContent = "Email me a sign-in link →"; }
+  },
+
+  async signOut(){
+    try{ await sb.auth.signOut(); }catch{}
+    localStorage.removeItem("ps_key");
+    state.key = null; state.viaEmail = false; state.client = null; state.episodes = [];
+    const u = new URL(location); u.searchParams.delete("key"); history.replaceState(null,"",u);
+    this.backToEmail(); show("loginView");
+  },
 
   async login(){
     const key = $("keyInput").value.trim();
@@ -891,8 +943,30 @@ $("showMoreBtn").onclick = ()=>{ state.limit += 48; renderList(); };
 $("chatInput").addEventListener("keydown", e=>{ if(e.key==="Enter" && (e.metaKey||e.ctrlKey)) STUDIO.sendCommand(); });
 $("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.login(); });
 
-// boot
+$("emailInput")?.addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.emailLogin(); });
+
+// boot: magic-link session first, then access key (URL or saved)
 (async function(){
+  // give supabase-js a beat to exchange a magic-link hash if one is present
+  if(/access_token=|type=magiclink|type=recovery/.test(location.hash)) await new Promise(r=>setTimeout(r, 600));
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    state.viaEmail = true;
+    try{
+      const o = await api("/api/overview");
+      state.client=o.client; state.episodes=o.episodes;
+      history.replaceState(null,"",location.pathname + location.search);
+      show("listView"); renderList(); schedulePoll();
+      return;
+    }catch(e){
+      // signed in but not whitelisted for any client
+      await sb.auth.signOut().catch(()=>{});
+      state.viaEmail = false;
+      show("loginView");
+      toast("Your email isn't linked to a studio yet — ask your account manager.");
+      return;
+    }
+  }
   const urlKey = new URL(location).searchParams.get("key");
   const key = urlKey || localStorage.getItem("ps_key");
   if(!key){ show("loginView"); return; }
@@ -905,7 +979,7 @@ $("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.login(
   }catch(e){
     localStorage.removeItem("ps_key");
     state.key=null; show("loginView");
-    if(urlKey) toast("That link is no longer valid — paste your access key");
+    if(urlKey) toast("That link is no longer valid — sign in with your email");
   }
 })();
 </script>
