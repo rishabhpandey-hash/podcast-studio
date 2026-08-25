@@ -4,192 +4,279 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Podcast Studio</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%236d28d9'/%3E%3Ccircle cx='50' cy='42' r='16' fill='none' stroke='white' stroke-width='8'/%3E%3Cpath d='M28 46c0 12 10 22 22 22s22-10 22-22M50 68v14' stroke='white' stroke-width='8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236d28d9'/%3E%3Cstop offset='1' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Ccircle cx='50' cy='42' r='16' fill='none' stroke='white' stroke-width='8'/%3E%3Cpath d='M28 46c0 12 10 22 22 22s22-10 22-22M50 68v14' stroke='white' stroke-width='8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
 <style>
 :root{
-  --bg:#f6f5fa; --card:#ffffff; --ink:#17151f; --muted:#6b6880; --line:#e6e3f0;
-  --brand:#6d28d9; --brand-soft:#f1ebfd; --ok:#137a4b; --ok-soft:#e3f5ec;
-  --warn:#92400e; --warn-soft:#fdf1e0; --bad:#b3261e; --bad-soft:#fdeceb;
-  --info:#1d4ed8; --info-soft:#e8effd; --radius:14px;
+  --bg:#f4f3fa; --card:#ffffff; --ink:#17131f; --muted:#6f6a80; --line:#e9e6f2;
+  --brand:#6d28d9; --brand2:#a855f7; --brand-soft:#f3edfd; --brand-ink:#5b21b6;
+  --grad:linear-gradient(135deg,#6d28d9 0%,#9333ea 55%,#c026d3 100%);
+  --ok:#0e7a4d; --ok-soft:#e2f6ec; --warn:#92400e; --warn-soft:#fdf1df;
+  --bad:#b3261e; --bad-soft:#fdeceb; --info:#4338ca; --info-soft:#eceafd;
+  --r-lg:18px; --r-md:13px;
+  --shadow:0 1px 2px rgba(25,15,60,.05),0 1px 1px rgba(25,15,60,.03);
+  --shadow-hover:0 14px 34px rgba(93,52,201,.14),0 3px 8px rgba(25,15,60,.06);
 }
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.55 "Inter",-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+html{scroll-behavior:smooth}
+body{margin:0;font:15px/1.55 "Plus Jakarta Sans",-apple-system,system-ui,sans-serif;background:
+  radial-gradient(1200px 400px at 15% -10%, rgba(147,51,234,.07), transparent 60%),
+  radial-gradient(900px 380px at 95% -5%, rgba(192,38,211,.06), transparent 55%),
+  var(--bg);
+  color:var(--ink);-webkit-font-smoothing:antialiased}
 a{color:var(--brand);text-decoration:none}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 14px}
-button:hover{border-color:#c9c3e2}
-button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
-button.primary:hover{background:#5b21b6}
-button:disabled{opacity:.55;cursor:default}
-.wrap{max-width:1180px;margin:0 auto;padding:20px 22px 60px}
-header{display:flex;align-items:center;gap:12px;padding:14px 0 18px;flex-wrap:wrap}
-header>div:first-of-type{min-width:220px;flex:1}
-header button{white-space:nowrap}
-header .logo{max-height:40px;max-width:150px;object-fit:contain}
-header .brandname{font-weight:700;font-size:19px}
-header .sub{color:var(--muted);font-size:13px}
-header .spacer{flex:1}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
-.badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
-.badge.ready{background:var(--ok-soft);color:var(--ok)}
+h1,h2,h3{font-family:"Sora","Plus Jakarta Sans",sans-serif;text-wrap:balance}
+button{font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-md);padding:9px 16px;transition:border-color .15s, box-shadow .15s, transform .1s, background .15s}
+button:hover{border-color:#cec7ea;box-shadow:var(--shadow)}
+button:active{transform:translateY(1px)}
+button.primary{background:var(--grad);border:none;color:#fff;box-shadow:0 4px 14px rgba(109,40,217,.32)}
+button.primary:hover{box-shadow:0 6px 20px rgba(109,40,217,.42)}
+button:disabled{opacity:.55;cursor:default;box-shadow:none}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--brand2);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px 70px}
+
+/* ---------- header ---------- */
+.topbar{position:sticky;top:0;z-index:40;background:rgba(250,249,253,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(233,230,242,.9)}
+.topbar-in{max-width:1180px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand img{max-height:34px;max-width:130px;object-fit:contain}
+.brand .t{font-family:"Sora",sans-serif;font-weight:700;font-size:17px;white-space:nowrap}
+.brand .t em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top-actions button{white-space:nowrap;padding:9px 14px;font-size:13.5px}
+.hero-sub{color:var(--muted);font-size:13px;margin:14px 0 0}
+
+/* ---------- badges ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:99px;font-size:11.5px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor;opacity:.7}
+.badge.ready,.badge.done{background:var(--ok-soft);color:var(--ok)}
 .badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending,.badge.importing{background:var(--warn-soft);color:var(--warn)}
 .badge.new{background:var(--info-soft);color:var(--info)}
 .badge.failed{background:var(--bad-soft);color:var(--bad)}
-.badge.none,.badge.draft{background:#eeecf5;color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
-.ep-card{cursor:pointer;transition:box-shadow .15s}
-.ep-card:hover{box-shadow:0 4px 18px rgba(60,40,120,.10)}
-.ep-card h3{margin:0 0 6px;font-size:16px}
-.meta{color:var(--muted);font-size:13px;display:flex;gap:12px;flex-wrap:wrap}
-.counts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.count-pill{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:4px 10px;font-size:12.5px}
-.count-pill b{font-size:13.5px}
-.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 16px}
-.toolbar .spacer{flex:1}
-h2{font-size:17px;margin:26px 0 12px}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:22px 0 16px}
-.tabs button{border:none;background:none;border-radius:8px 8px 0 0;padding:9px 16px;color:var(--muted);font-weight:600}
-.tabs button.active{color:var(--brand);box-shadow:inset 0 -2.5px 0 var(--brand)}
-.videobar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.reel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.reel{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--card)}
-.reel h4{margin:0 0 8px;font-size:14px}
-.reel .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.reel .actions a,.reel .actions span.dis{font-size:13px;font-weight:600}
-.post{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card);margin-bottom:12px}
-.post .hook{font-weight:700;margin-bottom:6px}
-.post pre{white-space:pre-wrap;font:inherit;margin:0 0 10px}
-.post .fc{background:var(--bg);border-radius:9px;padding:8px 12px;font-size:13.5px;color:var(--muted);margin-bottom:10px}
-.post .fc b{color:var(--ink)}
-.chat{display:flex;flex-direction:column;gap:10px;max-height:430px;overflow:auto;padding:4px 2px;margin-bottom:12px}
-.msg{max-width:82%;border-radius:14px;padding:10px 14px;font-size:14px}
-.msg.you{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
-.msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
-.msg .who{font-size:11px;opacity:.75;margin-bottom:3px}
-.chatline{display:flex;gap:8px}
-.chatline textarea{flex:1;resize:vertical;min-height:52px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
-.chatline select{border:1px solid var(--line);border-radius:10px;padding:8px;max-width:180px;font:inherit;background:var(--card)}
+.badge.none,.badge.draft{background:#efedf6;color:var(--muted)}
+@keyframes pulse{50%{opacity:.45}}
+.badge.producing::before,.badge.publishing::before,.badge.working::before,.badge.generating::before,.badge.importing::before{animation:pulse 1.2s infinite}
+
+/* ---------- list toolbar ---------- */
+.list-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:22px 0 18px}
+.search{flex:1;min-width:220px;position:relative}
+.search input{width:100%;padding:11px 14px 11px 40px;border:1px solid var(--line);border-radius:var(--r-md);font:inherit;background:var(--card);box-shadow:var(--shadow)}
+.search::before{content:"⌕";position:absolute;left:14px;top:50%;transform:translateY(-54%);font-size:19px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border-radius:99px;padding:7px 14px;font-size:13px;background:transparent;border-color:transparent;color:var(--muted)}
+.chips button:hover{background:var(--card);box-shadow:none}
+.chips button.on{background:var(--card);border-color:var(--line);color:var(--brand-ink);box-shadow:var(--shadow)}
+.chips b{font-weight:700}
+
+/* ---------- episode grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.ep-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;cursor:pointer;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow);transition:box-shadow .18s, transform .18s, border-color .18s;position:relative;overflow:hidden}
+.ep-card::after{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--grad);opacity:0;transition:opacity .18s}
+.ep-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover);border-color:#ddd4f5}
+.ep-card:hover::after{opacity:1}
+.ep-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ep-card h3{margin:0;font-size:15.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
+.meta{color:var(--muted);font-size:12.5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.meta .dot{opacity:.5}
+.ep-foot{margin-top:auto;display:flex;gap:14px;align-items:center;border-top:1px dashed var(--line);padding-top:12px;font-size:12.5px;color:var(--muted)}
+.ep-foot b{color:var(--ink);font-weight:700}
+.ep-foot .go{margin-left:auto;color:var(--brand);font-weight:700;font-size:13px;opacity:0;transition:opacity .15s}
+.ep-card:hover .go{opacity:1}
+.show-more{display:flex;justify-content:center;margin:22px 0 0}
+.empty{color:var(--muted);text-align:center;padding:60px 16px;background:var(--card);border:1px dashed var(--line);border-radius:var(--r-lg);line-height:2}
+
+/* ---------- detail ---------- */
+.back{background:none;border:none;color:var(--brand);font-weight:700;padding:0;box-shadow:none!important}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;margin-top:16px}
+.hero-band{height:6px;background:var(--grad)}
+.hero-body{padding:22px}
+.hero h2{margin:0 0 6px;font-size:21px}
+.videobar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:var(--r-md);padding:10px 14px;margin:12px 0 0;font-size:14px}
 .note{color:var(--muted);font-size:13px}
-.empty{color:var(--muted);text-align:center;padding:36px 10px}
-.timeline{font-size:13.5px}
-.timeline div{padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
+.progressline{margin-top:12px;font-size:13.5px;color:var(--warn);background:var(--warn-soft);border-radius:10px;padding:8px 13px;display:inline-block}
+
+.tabs{display:inline-flex;gap:2px;background:#ece9f5;border-radius:99px;padding:4px;margin:24px 0 18px}
+.tabs button{border:none;background:transparent;border-radius:99px;padding:8px 18px;color:var(--muted);font-size:13.5px;box-shadow:none}
+.tabs button.active{background:var(--card);color:var(--brand-ink);box-shadow:var(--shadow)}
+
+.section-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.section-tools .spacer{flex:1}
+
+.reel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.reel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;transition:box-shadow .18s, transform .18s}
+.reel:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover)}
+.reel .thumb{aspect-ratio:9/13;background:
+  radial-gradient(120% 90% at 20% 10%, rgba(255,255,255,.22), transparent 50%), var(--grad);
+  display:flex;align-items:center;justify-content:center;color:#fff;position:relative}
+.reel .thumb .play{width:52px;height:52px;border-radius:99px;background:rgba(255,255,255,.22);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;font-size:20px;border:1px solid rgba(255,255,255,.45)}
+.reel .thumb a{position:absolute;inset:0}
+.reel .thumb .vert{position:absolute;bottom:10px;left:12px;font-size:11px;font-weight:700;letter-spacing:.06em;background:rgba(0,0,0,.28);padding:3px 9px;border-radius:99px;color:#fff}
+.reel .body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:9px;flex:1}
+.reel h4{margin:0;font-size:13.5px;font-family:"Plus Jakarta Sans";font-weight:700;line-height:1.35}
+.reel .actions{margin-top:auto;display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700}
+
+.post{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;margin-bottom:14px;box-shadow:var(--shadow)}
+.post .hook{font-family:"Sora",sans-serif;font-weight:700;font-size:15.5px;margin-bottom:10px}
+.post pre{white-space:pre-wrap;font:inherit;margin:0 0 12px;color:#2a2536}
+.post .fc{background:var(--bg);border-radius:10px;padding:9px 13px;font-size:13px;color:var(--muted);margin-bottom:12px}
+.post .fc b{color:var(--ink)}
+.post .postbar{display:flex;gap:8px;align-items:center}
+.post .n{margin-left:auto;color:var(--muted);font-size:12px}
+
+.chatwrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow)}
+.chat{display:flex;flex-direction:column;gap:10px;max-height:440px;overflow:auto;padding:4px 2px;margin:12px 0}
+.msg{max-width:82%;border-radius:16px;padding:11px 15px;font-size:14px}
+.msg.you{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:5px}
+.msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:5px}
+.msg .who{font-size:11px;opacity:.75;margin-bottom:4px;font-weight:700}
+.chatline{display:flex;gap:8px}
+.chatline textarea{flex:1;resize:vertical;min-height:52px;border:1px solid var(--line);border-radius:var(--r-md);padding:11px 13px;font:inherit}
+.chatline select{border:1px solid var(--line);border-radius:var(--r-md);padding:9px;max-width:170px;font:inherit;background:var(--card)}
+.suggest{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.suggest button{font-size:12px;padding:6px 12px;border-radius:99px;color:var(--muted);font-weight:600}
+
+.timeline{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:8px 20px;font-size:13.5px;box-shadow:var(--shadow)}
+.timeline div{padding:11px 0;border-bottom:1px dashed var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
 .timeline div:last-child{border-bottom:none}
-.timeline .t{color:var(--muted);min-width:118px}
-.err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px}
-.login{max-width:420px;margin:12vh auto}
-.login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:10px 0 14px}
-footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
-.back{background:none;border:none;color:var(--brand);font-weight:600;padding:0}
-#recModal{position:fixed;inset:0;background:rgba(20,15,35,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
-.rec-card{background:var(--card);border-radius:16px;padding:20px;width:min(640px,96vw);display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 60px rgba(20,10,60,.35)}
-.rec-card video{width:100%;aspect-ratio:16/9;background:#111;border-radius:12px;object-fit:cover}
-.rec-card input{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+.timeline .t{color:var(--muted);min-width:130px;font-variant-numeric:tabular-nums;font-size:12.5px}
+
+/* ---------- login ---------- */
+.login{max-width:430px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:var(--shadow-hover)}
+.login .mark{width:52px;height:52px;border-radius:15px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;margin-bottom:14px}
+.login input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-md);font:inherit;margin:12px 0 16px}
+
+/* ---------- recorder ---------- */
+#recModal{position:fixed;inset:0;background:rgba(18,12,35,.6);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.rec-card{background:var(--card);border-radius:22px;padding:22px;width:min(660px,96vw);display:flex;flex-direction:column;gap:13px;box-shadow:0 24px 80px rgba(15,8,45,.45)}
+.rec-card video{width:100%;aspect-ratio:16/9;background:#0d0b14;border-radius:14px;object-fit:cover}
+.rec-card input{border:1px solid var(--line);border-radius:var(--r-md);padding:11px 13px;font:inherit}
 .rec-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .rec-mode{display:flex;gap:6px}
-.rec-mode button{border-radius:99px;padding:6px 14px;font-size:13.5px}
-.rec-mode button.active{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
-.rec-audio-note{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:26px 14px;text-align:center;color:var(--muted)}
-.rec-live{color:var(--bad);font-weight:700}
-#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;z-index:60}
-#toast.show{opacity:1}
-@media (max-width:640px){ .wrap{padding:12px 12px 50px} .msg{max-width:95%} }
+.rec-mode button{border-radius:99px;padding:7px 15px;font-size:13px}
+.rec-mode button.active{background:var(--brand-soft);border-color:#d8c8f7;color:var(--brand-ink)}
+.rec-audio-note{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:34px 14px;text-align:center;color:var(--muted)}
+.rec-live{color:var(--bad);font-weight:800}
+
+footer{margin-top:56px;color:var(--muted);font-size:12.5px;text-align:center}
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(8px);background:#1d1830;color:#fff;padding:11px 20px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;max-width:82vw;z-index:60;box-shadow:0 10px 34px rgba(0,0,0,.35)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:640px){ .wrap{padding:0 13px 56px} .topbar-in{padding:10px 13px} .msg{max-width:94%} .brand .t{font-size:15px} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <img id="logo" class="logo" style="display:none" alt="">
-    <div>
-      <div class="brandname" id="clientName">Podcast Studio</div>
-      <div class="sub">Record once — get your edited episode, reels, and LinkedIn posts.</div>
-    </div>
-    <div class="spacer"></div>
-    <button id="recHereBtn" class="primary" style="display:none" onclick="STUDIO.openRecorder()">⏺ Record here</button>
-    <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener" style="display:none"><button>🎙 Record in Descript</button></a>
-    <button id="uploadBtn" style="display:none">⬆ Upload recording</button>
-    <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
-    <button id="refreshBtn" style="display:none">↻ Check for new recordings</button>
-  </header>
 
-  <div id="loginView" class="login card" style="display:none">
-    <h2 style="margin-top:0">Welcome</h2>
+<div class="topbar" id="topbar" style="display:none">
+  <div class="topbar-in">
+    <div class="brand">
+      <img id="logo" style="display:none" alt="">
+      <span class="t" id="clientName">Podcast <em>Studio</em></span>
+    </div>
+    <div class="top-actions">
+      <button id="recHereBtn" class="primary" onclick="STUDIO.openRecorder()">⏺ Record here</button>
+      <button id="uploadBtn">⬆ Upload</button>
+      <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
+      <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener"><button title="Record long multi-guest sessions in Descript">🎙 Descript</button></a>
+      <button id="refreshBtn" title="Check for new recordings">↻</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="loginView" class="login" style="display:none">
+    <div class="mark">🎙</div>
+    <h2 style="margin:0 0 6px">Welcome to your studio</h2>
     <p class="note">Paste the access key you received from your account manager.</p>
     <input id="keyInput" placeholder="your-access-key" autocomplete="off">
     <button class="primary" style="width:100%" onclick="STUDIO.login()">Open my studio</button>
   </div>
 
   <div id="listView" style="display:none">
-    <div class="toolbar">
-      <h2 style="margin:0">Your episodes</h2>
-      <div class="spacer"></div>
-      <span class="note" id="listNote"></span>
+    <p class="hero-sub" id="listNote">Record once — your edited episode, reels and LinkedIn posts arrive here automatically.</p>
+    <div class="list-tools">
+      <div class="search"><input id="epSearch" placeholder="Search recordings…" autocomplete="off"></div>
+      <div class="chips" id="statusChips"></div>
     </div>
     <div class="grid" id="epGrid"></div>
+    <div class="show-more" id="showMoreWrap" style="display:none"><button id="showMoreBtn"></button></div>
     <div class="empty" id="epEmpty" style="display:none">
-      No recordings found yet.<br><br>
-      Hit “⏺ Record here” to record straight from this page — it goes into production the moment you stop.<br>
-      Already have a recording (Zoom, phone, anywhere)? “⬆ Upload recording” drops it straight in.<br>
-      For long multi-guest sessions, record in Descript and it appears here automatically.
+      <b>No recordings yet.</b><br>
+      Hit “⏺ Record here” to record straight from this page,<br>
+      “⬆ Upload” to drop in a file from anywhere (Zoom, phone…),<br>
+      or record in Descript and it appears here automatically.
     </div>
   </div>
 
   <div id="detailView" style="display:none">
-    <div class="toolbar">
-      <button class="back" onclick="STUDIO.backToList()">← All episodes</button>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start">
-        <div>
-          <h2 style="margin:0 0 6px" id="dName"></h2>
-          <div class="meta" id="dMeta"></div>
+    <div style="margin-top:18px"><button class="back" onclick="STUDIO.backToList()">← All episodes</button></div>
+    <div class="hero">
+      <div class="hero-band"></div>
+      <div class="hero-body">
+        <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start">
+          <div style="min-width:0">
+            <h2 id="dName"></h2>
+            <div class="meta" id="dMeta"></div>
+          </div>
+          <div id="dStatus"></div>
         </div>
-        <div id="dStatus"></div>
+        <div id="dError"></div>
+        <div class="videobar" id="dActions"></div>
+        <div id="dProgress"></div>
       </div>
-      <div id="dError"></div>
-      <div class="videobar" style="margin-top:14px" id="dActions"></div>
-      <div class="note" id="dProgress" style="margin-top:10px"></div>
     </div>
 
     <div class="tabs">
       <button data-tab="reels" class="active" onclick="STUDIO.setTab('reels')">Reels <span id="tabReelsN"></span></button>
       <button data-tab="posts" onclick="STUDIO.setTab('posts')">LinkedIn posts <span id="tabPostsN"></span></button>
-      <button data-tab="assistant" onclick="STUDIO.setTab('assistant')">AI assistant</button>
+      <button data-tab="assistant" onclick="STUDIO.setTab('assistant')">✦ AI assistant</button>
       <button data-tab="activity" onclick="STUDIO.setTab('activity')">Activity</button>
     </div>
 
     <div id="tab-reels">
-      <div class="toolbar">
-        <span class="note">Short vertical clips cut from this episode, ready for Instagram, TikTok, YouTube Shorts and LinkedIn.</span>
+      <div class="section-tools">
+        <span class="note">Vertical clips ready for Instagram, TikTok, YouTube Shorts and LinkedIn.</span>
         <div class="spacer"></div>
-        <button id="reelsBtn" onclick="STUDIO.makeReels()">Generate reels</button>
+        <button id="reelsBtn" onclick="STUDIO.makeReels()">✨ Generate reels</button>
       </div>
       <div class="reel-grid" id="reelGrid"></div>
-      <div class="empty" id="reelEmpty" style="display:none">No reels yet. They are generated automatically after the episode is produced — or press “Generate reels”.</div>
+      <div class="empty" id="reelEmpty" style="display:none">No reels yet — they are cut automatically after the episode is produced, or press “Generate reels”.</div>
     </div>
 
     <div id="tab-posts" style="display:none">
-      <div class="toolbar">
+      <div class="section-tools">
         <span class="note">Publish-ready posts written from what was actually said in this episode.</span>
         <div class="spacer"></div>
-        <button id="postsBtn" onclick="STUDIO.makePosts()">Regenerate posts</button>
+        <button id="postsBtn" onclick="STUDIO.makePosts()">✨ Regenerate posts</button>
       </div>
       <div id="postList"></div>
-      <div class="empty" id="postEmpty" style="display:none">No posts yet. They are written automatically after the episode is produced.</div>
+      <div class="empty" id="postEmpty" style="display:none">No posts yet — they are written automatically after the episode is produced.</div>
     </div>
 
     <div id="tab-assistant" style="display:none">
-      <div class="card">
-        <p class="note" style="margin-top:0">Tell the AI editor what to change — in plain language. Examples: “Tighten the intro, it drags”, “Remove the section where we discuss pricing”, “Make reel 2 punchier and add bigger captions”. Edits take a few minutes; links update automatically when done.</p>
+      <div class="chatwrap">
+        <div style="display:flex;gap:10px;align-items:center">
+          <h3 style="margin:0;font-size:15px">Tell the editor what to change</h3>
+        </div>
         <div class="chat" id="chatLog"></div>
         <div class="chatline">
           <select id="chatTarget"><option value="">Whole project</option></select>
-          <textarea id="chatInput" placeholder="What should we change?"></textarea>
+          <textarea id="chatInput" placeholder="e.g. Tighten the intro, it drags…"></textarea>
           <button class="primary" id="chatSend" onclick="STUDIO.sendCommand()">Send</button>
         </div>
+        <div class="suggest">
+          <button onclick="STUDIO.suggest('Tighten the intro — get to the point in the first 10 seconds.')">Tighten the intro</button>
+          <button onclick="STUDIO.suggest('Make the captions bigger and bolder.')">Bigger captions</button>
+          <button onclick="STUDIO.suggest('Cut the small talk and any tangents that don\'t serve the main topic.')">Cut small talk</button>
+          <button onclick="STUDIO.suggest('Make this punchier — faster pacing, remove hesitations.')">Punchier pacing</button>
+        </div>
+        <p class="note" style="margin-bottom:0;margin-top:12px">Edits take a few minutes — links update automatically when done.</p>
       </div>
     </div>
 
     <div id="tab-activity" style="display:none">
-      <div class="card timeline" id="jobList"></div>
+      <div class="timeline" id="jobList"></div>
     </div>
   </div>
 
@@ -201,7 +288,7 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
 <div id="recModal" style="display:none">
   <div class="rec-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <h2 style="margin:0">Record an episode</h2>
+      <h2 style="margin:0;font-size:19px">Record an episode</h2>
       <button class="back" onclick="STUDIO.closeRecorder()">✕ Close</button>
     </div>
     <div class="rec-mode" id="recMode">
@@ -220,7 +307,7 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
       <button class="primary" onclick="STUDIO.useRecording()">✓ Use this recording</button>
       <button onclick="STUDIO.discardRecording()">Discard & re-record</button>
     </div>
-    <p class="note" id="recHint">Camera recordings can run ~10 minutes here (100 MB). Audio-only runs much longer. For long multi-guest video sessions, use Record in Descript.</p>
+    <p class="note" style="margin:0">Camera recordings can run ~10 minutes here (100 MB). Audio-only runs much longer. For long multi-guest video sessions, use Descript.</p>
   </div>
 </div>
 <div id="toast"></div>
@@ -232,15 +319,16 @@ const API = "https://mgnjlymtjmcoskqinhid.supabase.co/functions/v1/studio";
 const state = {
   key: null, client: null, episodes: [],
   episodeId: null, detail: null, tab: "reels",
-  pollTimer: null,
+  pollTimer: null, rec: null,
+  q: "", filter: "all", limit: 24,
 };
 
 function $(id){ return document.getElementById(id); }
-function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"), 3200); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"), 3400); }
 function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtDate(d){ if(!d) return ""; try{ return new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});}catch{return "";} }
-function fmtDur(s){ if(!s) return ""; s=Math.round(s); const m=Math.floor(s/60); return m>=60? `${Math.floor(m/60)}h ${m%60}m` : `${m}m ${s%60}s`; }
-function badge(status){ const label={new:"New recording",producing:"Producing…",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing…",pending:"Queued",publishing:"Rendering…",working:"Working…",done:"Done",draft:"Draft",importing:"Importing…"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
+function fmtDur(s){ if(!s) return ""; s=Math.round(s); const m=Math.floor(s/60); return m>=60? `${Math.floor(m/60)}h ${m%60}m` : m>0? `${m}m ${s%60}s` : `${s}s`; }
+function badge(status){ const label={new:"New recording",producing:"Producing",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing",pending:"Queued",publishing:"Rendering",working:"Working",done:"Done",draft:"Draft",importing:"Importing"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
 
 async function api(path, opts={}){
   const url = new URL(API + path);
@@ -251,51 +339,82 @@ async function api(path, opts={}){
   return data;
 }
 
-function mirror(){ $("studio-data").textContent = JSON.stringify({ client: state.client, episodes: state.episodes, episodeId: state.episodeId, detail: state.detail, tab: state.tab }); }
+function mirror(){ $("studio-data").textContent = JSON.stringify({ client: state.client, episodes: state.episodes, episodeId: state.episodeId, detail: state.detail, tab: state.tab, q: state.q, filter: state.filter }); }
 
 // ---------- views ----------
 function show(view){
   for(const v of ["loginView","listView","detailView"]) $(v).style.display = v===view ? "" : "none";
-  $("refreshBtn").style.display = view==="listView" ? "" : "none";
-  $("recordBtn").style.display = view==="listView" ? "" : "none";
-  $("uploadBtn").style.display = view==="listView" ? "" : "none";
-  $("recHereBtn").style.display = view==="listView" ? "" : "none";
+  $("topbar").style.display = view==="loginView" ? "none" : "";
+  const listOnly = view==="listView" ? "" : "none";
+  for(const id of ["recHereBtn","uploadBtn","recordBtn","refreshBtn"]) $(id).style.display = listOnly;
 }
 
 function renderHeader(){
   if(!state.client) return;
-  $("clientName").textContent = state.client.name ? `${state.client.name} — Podcast Studio` : "Podcast Studio";
+  $("clientName").innerHTML = state.client.name ? `${esc(state.client.name)} <em>Studio</em>` : `Podcast <em>Studio</em>`;
   if(state.client.logo_url){ const l=$("logo"); l.src=state.client.logo_url; l.style.display=""; l.onerror=()=>l.style.display="none"; }
+}
+
+const FILTERS = [
+  { id:"all", label:"All", test: ()=>true },
+  { id:"ready", label:"Ready", test: e=>e.status==="ready" },
+  { id:"working", label:"In production", test: e=>["producing","importing"].includes(e.status) },
+  { id:"new", label:"New", test: e=>e.status==="new" },
+  { id:"failed", label:"Attention", test: e=>e.status==="failed" },
+];
+
+function visibleEpisodes(){
+  const q = state.q.trim().toLowerCase();
+  const f = FILTERS.find(x=>x.id===state.filter) || FILTERS[0];
+  return state.episodes.filter(e => f.test(e) && (!q || (e.name||"").toLowerCase().includes(q)));
 }
 
 function renderList(){
   renderHeader();
-  const grid = $("epGrid"); grid.innerHTML = "";
-  const eps = state.episodes;
-  $("epEmpty").style.display = eps.length ? "none" : "";
   $("listNote").textContent = state.client?.connected
-    ? (state.client.auto_produce ? "New recordings are produced automatically." : "")
-    : "Recording account not connected yet — ask your account manager.";
-  for(const e of eps){
+    ? "Record once — your edited episode, reels and LinkedIn posts arrive here automatically."
+    : "Recording account not connected yet — ask your account manager to finish onboarding.";
+
+  // chips with counts
+  const chips = $("statusChips"); chips.innerHTML = "";
+  for(const f of FILTERS){
+    const n = state.episodes.filter(f.test).length;
+    if(f.id!=="all" && n===0) continue;
+    const b = document.createElement("button");
+    b.className = state.filter===f.id ? "on" : "";
+    b.innerHTML = `${esc(f.label)} <b>${n}</b>`;
+    b.onclick = ()=>{ state.filter=f.id; state.limit=24; renderList(); };
+    chips.appendChild(b);
+  }
+
+  const list = visibleEpisodes();
+  const grid = $("epGrid"); grid.innerHTML = "";
+  $("epEmpty").style.display = state.episodes.length ? "none" : "";
+  const shown = list.slice(0, state.limit);
+  for(const e of shown){
     const card = document.createElement("div");
-    card.className = "card ep-card";
+    card.className = "ep-card";
     card.dataset.episodeId = e.id;
     card.onclick = ()=>STUDIO.openEpisode(e.id);
     card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-        <h3>${esc(e.name)}</h3>${badge(e.status)}
-      </div>
+      <div class="ep-top"><h3>${esc(e.name)}</h3>${badge(e.status)}</div>
       <div class="meta">
-        ${e.recorded_at?`<span>Recorded ${fmtDate(e.recorded_at)}</span>`:""}
-        ${e.duration_seconds?`<span>${fmtDur(e.duration_seconds)}</span>`:""}
-        ${e.folder_path?`<span>${esc(e.folder_path)}</span>`:""}
+        ${e.recorded_at?`<span>${fmtDate(e.recorded_at)}</span>`:""}
+        ${e.duration_seconds?`<span class="dot">·</span><span>${fmtDur(e.duration_seconds)}</span>`:""}
+        ${e.folder_path?`<span class="dot">·</span><span>${esc(e.folder_path)}</span>`:""}
       </div>
-      <div class="counts">
-        <span class="count-pill">🎬 <b>${e.status==="ready"?"Episode ready":"Episode"}</b></span>
-        <span class="count-pill">📱 <b>${e.reels}</b> reels</span>
-        <span class="count-pill">✍️ <b>${e.posts}</b> posts</span>
+      <div class="ep-foot">
+        <span>📱 <b>${e.reels}</b> reels</span>
+        <span>✍️ <b>${e.posts}</b> posts</span>
+        <span class="go">Open →</span>
       </div>`;
     grid.appendChild(card);
+  }
+  const more = list.length - shown.length;
+  $("showMoreWrap").style.display = more>0 ? "" : "none";
+  if(more>0) $("showMoreBtn").textContent = `Show ${Math.min(more,48)} more of ${more}`;
+  if(list.length===0 && state.episodes.length){
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">Nothing matches — clear the search or pick another filter.</div>`;
   }
   mirror();
 }
@@ -316,11 +435,11 @@ function renderDetail(){
   if(e.share_url) actions.push(`<a href="${esc(e.share_url)}" target="_blank" rel="noopener"><button class="primary">▶ Watch episode</button></a>`);
   if(e.download_url) actions.push(`<a href="${esc(e.download_url)}" target="_blank" rel="noopener"><button>⬇ Download video</button></a>`);
   if(e.status==="new"||e.status==="failed") actions.push(`<button class="primary" onclick="STUDIO.produce()">✨ Produce this episode</button>`);
-  if(e.project_url) actions.push(`<a href="${esc(e.project_url)}" target="_blank" rel="noopener"><button>Open in Descript (edit yourself)</button></a>`);
+  if(e.project_url) actions.push(`<a href="${esc(e.project_url)}" target="_blank" rel="noopener"><button>Open in Descript</button></a>`);
   $("dActions").innerHTML = actions.join(" ");
 
   const active = (d.jobs||[]).find(j=>!["done","failed","cancelled"].includes(j.step));
-  $("dProgress").textContent = active ? currentActivityLabel(active) : "";
+  $("dProgress").innerHTML = active ? `<span class="progressline">${esc(currentActivityLabel(active))}</span>` : "";
 
   // reels
   const rg = $("reelGrid"); rg.innerHTML = "";
@@ -330,10 +449,17 @@ function renderDetail(){
     const div = document.createElement("div");
     div.className = "reel"; div.dataset.reelId = r.id;
     div.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:8px"><h4>${esc(r.title||"Reel")}</h4>${badge(r.status)}</div>
-      <div class="actions">
-        ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener">▶ Watch</a>`:`<span class="dis note">rendering…</span>`}
-        ${r.download_url?`<a href="${esc(r.download_url)}" target="_blank" rel="noopener">⬇ Download</a>`:""}
+      <div class="thumb">
+        <div class="play">▶</div>
+        <span class="vert">9:16</span>
+        ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener" aria-label="Watch ${esc(r.title||"reel")}"></a>`:""}
+      </div>
+      <div class="body">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h4>${esc(r.title||"Reel")}</h4>${badge(r.status)}</div>
+        <div class="actions">
+          ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener">▶ Watch</a>`:`<span class="note">rendering…</span>`}
+          ${r.download_url?`<a href="${esc(r.download_url)}" target="_blank" rel="noopener">⬇ Download</a>`:""}
+        </div>
       </div>`;
     rg.appendChild(div);
   }
@@ -343,16 +469,16 @@ function renderDetail(){
   $("tabPostsN").textContent = d.posts.length ? `(${d.posts.length})` : "";
   $("postEmpty").style.display = d.posts.length ? "none" : "";
   if(e.posts_status==="generating") $("postEmpty").textContent = "Writing your posts now — check back in a minute.";
-  for(const p of d.posts){
+  d.posts.forEach((p, i)=>{
     const div = document.createElement("div");
     div.className = "post"; div.dataset.postId = p.id;
     div.innerHTML = `
       <div class="hook">${esc(p.hook||"")}</div>
       <pre>${esc(p.body)}</pre>
       ${p.first_comment?`<div class="fc"><b>First comment:</b> ${esc(p.first_comment)}</div>`:""}
-      <button onclick="STUDIO.copyPost('${p.id}')">Copy post</button>`;
+      <div class="postbar"><button onclick="STUDIO.copyPost('${p.id}')">Copy post</button><span class="n">Post ${i+1} of ${state.detail.posts.length}</span></div>`;
     pl.appendChild(div);
-  }
+  });
 
   // assistant
   const log = $("chatLog"); log.innerHTML = "";
@@ -375,7 +501,7 @@ function renderDetail(){
   // activity
   const jl = $("jobList");
   jl.innerHTML = (d.jobs||[]).map(j=>{
-    const label = {produce_main:"Produce episode", make_reels:"Create reels", generate_posts:"Write LinkedIn posts", command:"Your request"}[j.kind]||j.kind;
+    const label = {produce_main:"Produce episode", make_reels:"Create reels", generate_posts:"Write LinkedIn posts", command:"Your request", import:"Import recording"}[j.kind]||j.kind;
     return `<div><span class="t">${esc(new Date(j.created_at).toLocaleString())}</span> <span>${esc(label)}</span> ${badge(j.step)} ${j.error?`<span class="note">${esc(j.error)}</span>`:""}</div>`;
   }).join("") || `<div class="note">Nothing yet.</div>`;
 
@@ -385,16 +511,16 @@ function renderDetail(){
 function currentActivityLabel(job){
   const prog = job.result?.progress;
   const pct = prog?.percent!=null ? ` (${Math.round(prog.percent)}%)` : "";
-  const what = {produce_main:"Producing the episode", make_reels:"Creating your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request"}[job.kind]||"Working";
+  const what = {produce_main:"Producing the episode", make_reels:"Creating your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request", import:"Importing your recording"}[job.kind]||"Working";
   const stage = job.step==="publishing" ? " — rendering video" : (prog?.label?` — ${prog.label}`:"");
-  return `${what}${stage}${pct}. This runs in the background; the page updates automatically.`;
+  return `${what}${stage}${pct} · updates automatically`;
 }
 
 // ---------- polling ----------
 function schedulePoll(){
   clearTimeout(state.pollTimer);
   const busyDetail = state.detail && ((state.detail.jobs||[]).some(j=>!["done","failed","cancelled"].includes(j.step)) || state.detail.episode.posts_status==="generating");
-  const busyList = state.episodes.some(e=>e.status==="producing");
+  const busyList = state.episodes.some(e=>["producing","importing"].includes(e.status));
   const ms = (busyDetail||busyList) ? 15000 : 60000;
   state.pollTimer = setTimeout(async ()=>{
     try{
@@ -407,8 +533,10 @@ function schedulePoll(){
 
 // ---------- agent-friendly API ----------
 window.STUDIO = {
-  describe(){ return "Podcast Studio dashboard. State mirror in #studio-data. Methods: login, openEpisode(id), backToList, setTab(name), produce, makeReels, makePosts, sendCommand, copyPost(id), refresh."; },
+  describe(){ return "Podcast Studio dashboard. State mirror in #studio-data. Methods: login, openEpisode(id), backToList, setTab(name), produce, makeReels, makePosts, sendCommand, suggest(text), copyPost(id), refresh, checkNew, openRecorder, uploadFile(file), setFilter(id), search(q)."; },
   getState(){ return JSON.parse($("studio-data").textContent); },
+  setFilter(id){ state.filter=id; state.limit=24; renderList(); },
+  search(q){ state.q=q; $("epSearch").value=q; state.limit=24; renderList(); },
 
   async login(){
     const key = $("keyInput").value.trim();
@@ -428,6 +556,7 @@ window.STUDIO = {
     try{ state.detail = await api(`/api/episode?id=${id}`); }
     catch(e){ return toast(e.message); }
     show("detailView"); this.setTab("reels"); renderDetail(); schedulePoll();
+    window.scrollTo({top:0});
   },
 
   backToList(){ state.episodeId=null; state.detail=null; show("listView"); this.refresh(); },
@@ -447,13 +576,13 @@ window.STUDIO = {
   },
 
   async checkNew(){
-    const btn = $("refreshBtn"); btn.disabled=true; btn.textContent="Checking…";
+    const btn = $("refreshBtn"); btn.disabled=true; btn.textContent="…";
     try{
       const r = await api("/api/refresh",{method:"POST",body:"{}"});
       state.client=r.client; state.episodes=r.episodes; renderList();
       toast(r.added ? `${r.added} new recording${r.added>1?"s":""} found` : "You're up to date");
     }catch(e){ toast(e.message); }
-    btn.disabled=false; btn.textContent="↻ Check for new recordings";
+    btn.disabled=false; btn.textContent="↻";
   },
 
   async produce(){
@@ -486,6 +615,8 @@ window.STUDIO = {
     }catch(e){ toast(e.message); }
     btn.disabled=false;
   },
+
+  suggest(text){ $("chatInput").value = text; $("chatInput").focus(); },
 
   async sendCommand(){
     const text = $("chatInput").value.trim();
@@ -608,7 +739,7 @@ window.STUDIO = {
 
   uploadFile(file){
     if(!file) return;
-    if(file.size > 100*1024*1024) return toast("Files up to 100 MB can be uploaded here. Bigger recordings: use Record in Descript.");
+    if(file.size > 100*1024*1024) return toast("Files up to 100 MB can be uploaded here. Bigger recordings: record in Descript.");
     const btn = $("uploadBtn"); btn.disabled = true;
     const u = new URL(API + "/api/upload");
     u.searchParams.set("key", state.key);
@@ -618,16 +749,16 @@ window.STUDIO = {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", u);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
-    xhr.upload.onprogress = e=>{ if(e.lengthComputable) btn.textContent = `Uploading… ${Math.round(e.loaded/e.total*100)}%`; };
+    xhr.upload.onprogress = e=>{ if(e.lengthComputable) btn.textContent = `↑ ${Math.round(e.loaded/e.total*100)}%`; };
     xhr.onload = ()=>{
-      btn.disabled = false; btn.textContent = "⬆ Upload recording";
+      btn.disabled = false; btn.textContent = "⬆ Upload";
       let r = {}; try{ r = JSON.parse(xhr.responseText); }catch{}
       if(xhr.status >= 200 && xhr.status < 300 && r.ok){
-        toast("Uploaded — transcribing now. It will show as ready to produce in a few minutes.");
+        toast("Uploaded — transcribing now. It shows as ready to produce in a few minutes.");
         STUDIO.refresh();
       } else toast(r.error || "Upload failed — try again.");
     };
-    xhr.onerror = ()=>{ btn.disabled = false; btn.textContent = "⬆ Upload recording"; toast("Upload failed — check your connection and try again."); };
+    xhr.onerror = ()=>{ btn.disabled = false; btn.textContent = "⬆ Upload"; toast("Upload failed — check your connection and try again."); };
     xhr.send(file);
   },
 };
@@ -635,6 +766,8 @@ window.STUDIO = {
 $("refreshBtn").onclick = ()=>STUDIO.checkNew();
 $("uploadBtn").onclick = ()=>$("uploadInput").click();
 $("uploadInput").addEventListener("change", e=>{ STUDIO.uploadFile(e.target.files[0]); e.target.value=""; });
+$("epSearch").addEventListener("input", e=>{ state.q = e.target.value; state.limit = 24; renderList(); });
+$("showMoreBtn").onclick = ()=>{ state.limit += 48; renderList(); };
 $("chatInput").addEventListener("keydown", e=>{ if(e.key==="Enter" && (e.metaKey||e.ctrlKey)) STUDIO.sendCommand(); });
 $("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.login(); });
 
