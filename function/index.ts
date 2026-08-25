@@ -349,7 +349,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
     if (!dscStatus) return;
     const state = dscStatus.job_state;
     if (state === "queued" || state === "running") {
-      await updateJob(job.id, { result: { progress: dscStatus.progress ?? null } });
+      await updateJob(job.id, { result: { ...(job.result ?? {}), progress: dscStatus.progress ?? null } });
       return;
     }
     if (state === "cancelled") { await failJob(job, new Error("The editing job was cancelled in Descript.")); return; }
@@ -420,6 +420,14 @@ async function advanceJob(job: any, dscStatus: any | null) {
     // ----- publish job finished -----
     if (job.step === "publishing") {
       if (failed) { await failJob(job, new Error(r.error_message || "Publishing the video failed.")); return; }
+      // Descript's completion callback can fire while the export file is still
+      // finalizing (download_url null). Stay in `publishing` so the minute cron
+      // re-polls until the download link exists (~8 min cap, then take what we have).
+      const retries = Number(job.payload?.download_retries ?? 0);
+      if (!r.download_url && retries < 8) {
+        await updateJob(job.id, { payload: { ...job.payload, download_retries: retries + 1 } });
+        return;
+      }
       const compId = (job.payload?.publishing_composition_id as string) || r.composition_id;
       const urls = {
         share_url: r.share_url ?? null,

@@ -91,6 +91,7 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
       <div class="sub">Record once — get your edited episode, reels, and LinkedIn posts.</div>
     </div>
     <div class="spacer"></div>
+    <a id="recordBtn" href="https://web.descript.com" target="_blank" rel="noopener" style="display:none"><button class="primary">🎙 Record in Descript</button></a>
     <button id="refreshBtn" style="display:none">↻ Check for new recordings</button>
   </header>
 
@@ -110,7 +111,7 @@ footer{margin-top:44px;color:var(--muted);font-size:12.5px;text-align:center}
     <div class="grid" id="epGrid"></div>
     <div class="empty" id="epEmpty" style="display:none">
       No recordings found yet.<br><br>
-      Record your podcast or webinar in Descript, then hit “Check for new recordings”.
+      Hit “🎙 Record in Descript” above to record your podcast or webinar — it appears here automatically when you're done.
     </div>
   </div>
 
@@ -213,6 +214,7 @@ function mirror(){ $("studio-data").textContent = JSON.stringify({ client: state
 function show(view){
   for(const v of ["loginView","listView","detailView"]) $(v).style.display = v===view ? "" : "none";
   $("refreshBtn").style.display = view==="listView" ? "" : "none";
+  $("recordBtn").style.display = view==="listView" ? "" : "none";
 }
 
 function renderHeader(){
