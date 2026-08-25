@@ -162,24 +162,23 @@ TRANSCRIPT:
 ${transcript}`;
 }
 
-// ---------- Anthropic ----------
+// ---------- OpenAI (post writer) ----------
 async function generatePosts(client: any, episode: any, transcript: string): Promise<any[]> {
-  const apiKey = await cfg("anthropic_api_key");
-  if (!apiKey) throw new Error("anthropic_api_key not configured (admin: POST /admin/config)");
-  const model = (await cfg("anthropic_model")) || "claude-sonnet-5";
+  const apiKey = await cfg("openai_api_key");
+  if (!apiKey) throw new Error("openai_api_key not configured (admin: POST /admin/config)");
+  const model = (await cfg("openai_model")) || "gpt-5.5";
   const trimmed = transcript.length > 180_000 ? transcript.slice(0, 180_000) + "\n[transcript truncated]" : transcript;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      max_tokens: 8000,
       messages: [{ role: "user", content: postsPrompt(client, episode.name, trimmed) }],
     }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`post generation failed: ${data?.error?.message || res.status}`);
-  const text = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  const text = data.choices?.[0]?.message?.content ?? "";
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
   if (start < 0 || end < 0) throw new Error("post generation returned no JSON array");
@@ -635,11 +634,11 @@ Deno.serve(async (req) => {
       if (path === "/admin/overview" && req.method === "GET") {
         const { data: clients } = await supabase.from("ps_clients").select("*").order("created_at");
         const { data: jobs } = await supabase.from("ps_jobs").select("id,kind,step,error,client_id,episode_id,ai_credits_used,created_at").order("created_at", { ascending: false }).limit(30);
-        const anthropicSet = !!(await cfg("anthropic_api_key"));
+        const openaiSet = !!(await cfg("openai_api_key"));
         return json({
           clients: (clients ?? []).map((c: any) => ({ ...c, descript_token: c.descript_token ? "set" : null })),
           recent_jobs: jobs ?? [],
-          config: { anthropic_api_key: anthropicSet },
+          config: { openai_api_key: openaiSet },
         });
       }
 

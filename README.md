@@ -11,7 +11,7 @@ Agentic podcast production for clients: record once in Descript → get the edit
 2. **Discovery:** every ~5 minutes (and on "Check for new recordings") we list the Drive's projects via `GET /v1/projects` and register new recordings as episodes. With `auto_produce` on, new recordings (created after onboarding) go straight into production.
 3. **Produce:** a Descript **Underlord agent job** (`POST /v1/jobs/agent`) edits the episode — filler words out, dead air cut, Studio Sound, captions. Then `POST /v1/jobs/publish` renders 1080p and returns a share URL + signed download URL.
 4. **Reels:** a second agent job creates N new 1080×1920 vertical compositions (per-client `reel_count`), each published separately.
-5. **LinkedIn posts:** the transcript is exported (`POST /v1/export/transcript`, markdown) and Claude writes 12 publish-ready posts (hook, body, first comment) tuned to the client's `target_audience` / `brand_notes`.
+5. **LinkedIn posts:** the transcript is exported (`POST /v1/export/transcript`, markdown) and an LLM (OpenAI GPT, `openai_model` config, default gpt-5.5) writes 12 publish-ready posts (hook, body, first comment) tuned to the client's `target_audience` / `brand_notes`.
 6. **Tweaks:** each chat message in the dashboard becomes an agent job (optionally targeted at the main episode or a specific reel via `composition_id`), then a republish — republishing reuses the same share URL.
 
 All async work is a state machine in `ps_jobs` (`queued → agent_running → publishing → done/failed`), advanced by:
@@ -35,9 +35,9 @@ Client (auth `?key=` or `X-Access-Key`):
 Admin (auth `X-Admin-Secret`):
 - `GET /admin/overview`
 - `POST /admin/clients {name, descript_token?, logo_url?, target_audience?, brand_notes?, reel_count?, auto_produce?, descript_model?}` — validates the token against `GET /v1/status` and runs first discovery
-- `POST /admin/clients/update {client_id, …}` · `POST /admin/config {key, value}` (e.g. `anthropic_api_key`, `anthropic_model`)
+- `POST /admin/clients/update {client_id, …}` · `POST /admin/config {key, value}` (e.g. `openai_api_key`, `openai_model`)
 
-Secrets live in the `ps_config` table (`admin_secret`, `webhook_secret`, `anthropic_api_key`). Per-client Descript tokens live on `ps_clients.descript_token`. Nothing secret ships in this repo — the HTML contains only the public function URL.
+Secrets live in the `ps_config` table (`admin_secret`, `webhook_secret`, `openai_api_key`). Per-client Descript tokens live on `ps_clients.descript_token`. Nothing secret ships in this repo — the HTML contains only the public function URL.
 
 ## Onboarding runbook (per client)
 
