@@ -80,7 +80,7 @@ select option{background:#fff;color:var(--ink)}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:99px;font-size:11.5px;font-weight:700;white-space:nowrap;letter-spacing:.02em}
 .badge::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor}
 .badge.ready,.badge.done{background:var(--ok-soft);color:var(--ok)}
-.badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending,.badge.importing{background:var(--warn-soft);color:var(--warn)}
+.badge.producing,.badge.publishing,.badge.working,.badge.generating,.badge.pending,.badge.importing,.badge.selected{background:var(--warn-soft);color:var(--warn)}
 .badge.new{background:var(--info-soft);color:var(--info)}
 .badge.failed{background:var(--bad-soft);color:var(--bad)}
 .badge.none,.badge.draft{background:#efedf6;color:var(--muted)}
@@ -88,7 +88,7 @@ select option{background:#fff;color:var(--ink)}
 .cover .badge.ready{color:#0e7a4d}.cover .badge.new{color:#4338ca}.cover .badge.failed{color:#b3261e}
 .cover .badge.producing,.cover .badge.importing{color:#92400e}
 @keyframes pulse{50%{opacity:.35}}
-.badge.producing::before,.badge.publishing::before,.badge.working::before,.badge.generating::before,.badge.importing::before{animation:pulse 1.1s infinite}
+.badge.producing::before,.badge.publishing::before,.badge.working::before,.badge.generating::before,.badge.importing::before,.badge.selected::before{animation:pulse 1.1s infinite}
 
 /* ---------- list tools ---------- */
 .list-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0 20px}
@@ -166,6 +166,13 @@ select option{background:#fff;color:var(--ink)}
 .reel .thumb .play{width:54px;height:54px;border-radius:99px;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid rgba(255,255,255,.4);color:#fff;z-index:2;transition:transform .18s}
 .reel:hover .thumb .play{transform:scale(1.12)}
 .reel .thumb a{position:absolute;inset:0;z-index:3}
+.reel .thumb .rank{position:absolute;top:10px;left:12px;z-index:2;font-family:"Sora";font-weight:800;font-size:13px;color:#fff;background:rgba(0,0,0,.42);border-radius:99px;padding:3px 10px;backdrop-filter:blur(4px)}
+.reel .thumb .kf{position:absolute;top:10px;right:12px;z-index:2;font-weight:800;font-size:11.5px;color:#fff;background:rgba(0,0,0,.42);border-radius:99px;padding:3px 9px;backdrop-filter:blur(4px)}
+.kbar{height:5px;border-radius:99px;background:var(--panel-2);overflow:hidden}
+.kbar span{display:block;height:100%;background:var(--grad)}
+.rhook{font-size:13px;font-weight:600;line-height:1.45;color:var(--ink)}
+.rwhy{font-size:12px;line-height:1.5;color:var(--muted)}
+.rmeta{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
 .reel .thumb .vert{position:absolute;bottom:10px;left:12px;font-size:10.5px;font-weight:800;letter-spacing:.08em;background:rgba(0,0,0,.4);padding:3px 9px;border-radius:99px;color:#fff;z-index:2}
 .reel .body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:9px;flex:1}
 .reel h4{margin:0;font-size:13px;font-weight:700;line-height:1.4}
@@ -338,12 +345,12 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
 
     <div id="tab-reels">
       <div class="section-tools">
-        <span class="note">Vertical clips ready for Instagram, TikTok, YouTube Shorts and LinkedIn.</span>
+        <span class="note">The 7 highest-virality conversational moments, scored and ranked by K-factor — each a standalone 9:16 clip with subtitles.</span>
         <div class="spacer"></div>
-        <button id="reelsBtn" onclick="STUDIO.makeReels()">✨ Generate reels</button>
+        <button id="reelsBtn" onclick="STUDIO.makeReels()">✨ Re-score & regenerate</button>
       </div>
       <div class="reel-grid" id="reelGrid"></div>
-      <div class="empty" id="reelEmpty" style="display:none">No reels yet — they are cut automatically after the episode is produced, or press “Generate reels”.</div>
+      <div class="empty" id="reelEmpty" style="display:none">No reels yet — after an episode is produced the AI scores every exchange and cuts the 7 best, or press “Re-score & regenerate”.</div>
     </div>
 
     <div id="tab-posts" style="display:none">
@@ -487,7 +494,8 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("sho
 function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtDate(d){ if(!d) return ""; try{ return new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});}catch{return "";} }
 function fmtDur(s){ if(!s) return ""; s=Math.round(s); const m=Math.floor(s/60); return m>=60? `${Math.floor(m/60)}h ${m%60}m` : m>0? `${m}m ${s%60}s` : `${s}s`; }
-function badge(status){ const label={new:"New recording",producing:"Producing",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing",pending:"Queued",publishing:"Rendering",working:"Working",done:"Done",draft:"Draft",importing:"Importing"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
+function fmtClock(sec){ if(sec==null) return ""; const t=Math.round(sec); return `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`; }
+function badge(status){ const label={new:"New recording",producing:"Producing",ready:"Ready",failed:"Needs attention",none:"—",generating:"Writing",pending:"Queued",publishing:"Rendering",working:"Working",done:"Done",draft:"Draft",importing:"Importing",selected:"Queued to cut"}[status]||status; return `<span class="badge ${esc(status)}">${esc(label)}</span>`; }
 
 // deterministic gradient cover per episode name
 function hueOf(s){ let h=0; for(const c of String(s)) h=(h*31 + c.charCodeAt(0))>>>0; return h%360; }
@@ -654,17 +662,25 @@ function renderDetail(){
   d.reels.forEach((r, i)=>{
     const div = document.createElement("div");
     div.className = "reel"; div.dataset.reelId = r.id;
+    if(r.k_factor!=null) div.dataset.kFactor = r.k_factor;
     div.style.animationDelay = `${i*60}ms`;
+    const len = (r.start_s!=null && r.end_s!=null) ? Math.round(r.end_s - r.start_s) : null;
     div.innerHTML = `
       <div class="thumb" style="${coverCss(r.title||("reel"+i))}">
         <div class="play">▶</div>
-        <span class="vert">9:16 REEL</span>
+        ${r.rank?`<span class="rank">#${r.rank}</span>`:""}
+        ${r.k_factor!=null?`<span class="kf" title="Virality score (K-factor)">🔥 ${Math.round(r.k_factor)}</span>`:""}
+        <span class="vert">9:16${len?` · ${len}s`:""}</span>
         ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener" aria-label="Watch ${esc(r.title||"reel")}"></a>`:""}
       </div>
       <div class="body">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h4>${esc(r.title||"Reel")}</h4>${badge(r.status)}</div>
+        ${r.k_factor!=null?`<div class="kbar" title="K-factor ${Math.round(r.k_factor)}/100"><span style="width:${Math.max(4,Math.min(100,r.k_factor))}%"></span></div>`:""}
+        ${r.hook?`<div class="rhook">“${esc(r.hook)}”</div>`:""}
+        ${r.why?`<div class="rwhy">${esc(r.why)}</div>`:""}
+        ${(r.start_s!=null)?`<div class="rmeta">${fmtClock(r.start_s)}–${fmtClock(r.end_s)}${r.speakers?` · ${esc(r.speakers)}`:""}</div>`:""}
         <div class="actions">
-          ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener">▶ Watch</a>`:`<span class="note">rendering…</span>`}
+          ${r.share_url?`<a href="${esc(r.share_url)}" target="_blank" rel="noopener">▶ Watch</a>`:`<span class="note">${r.status==="selected"?"queued to cut…":"rendering…"}</span>`}
           ${r.download_url?`<a href="${esc(r.download_url)}" target="_blank" rel="noopener">⬇ Save</a>`:""}
         </div>
       </div>`;
@@ -713,7 +729,7 @@ function renderDetail(){
   // activity
   const jl = $("jobList");
   jl.innerHTML = (d.jobs||[]).map(j=>{
-    const label = {produce_main:"Produce episode", make_reels:"Create reels", generate_posts:"Write LinkedIn posts", command:"Your request", import:"Import recording"}[j.kind]||j.kind;
+    const label = {produce_main:"Produce episode", select_reels:"Pick the best clips (AI scoring)", make_reels:"Cut & render reels", generate_posts:"Write LinkedIn posts", command:"Your request", import:"Import recording"}[j.kind]||j.kind;
     return `<div><span class="t">${esc(new Date(j.created_at).toLocaleString())}</span> <span>${esc(label)}</span> ${badge(j.step)} ${j.error?`<span class="note">${esc(j.error)}</span>`:""}</div>`;
   }).join("") || `<div class="note">Nothing yet.</div>`;
 
@@ -723,7 +739,7 @@ function renderDetail(){
 function currentActivityLabel(job){
   const prog = job.result?.progress;
   const pct = prog?.percent!=null ? ` (${Math.round(prog.percent)}%)` : "";
-  const what = {produce_main:"Producing the episode", make_reels:"Creating your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request", import:"Importing your recording"}[job.kind]||"Working";
+  const what = {produce_main:"Producing the episode", select_reels:"Scoring the best moments for reels", make_reels:"Cutting and rendering your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request", import:"Importing your recording"}[job.kind]||"Working";
   const stage = job.step==="publishing" ? " — rendering video" : (prog?.label?` — ${prog.label}`:"");
   return `${what}${stage}${pct} · updates automatically`;
 }
@@ -839,7 +855,7 @@ window.STUDIO = {
     const btn=$("reelsBtn"); btn.disabled=true;
     try{
       await api("/api/reels",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
-      toast("Reel creation started");
+      toast("Scoring the episode for the most viral moments…");
       state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
     }catch(e){ toast(e.message); }
     btn.disabled=false;

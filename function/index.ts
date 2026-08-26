@@ -3,9 +3,11 @@
 //
 // Flow: client records in Descript → we discover the project → Underlord agent job
 // produces the episode (filler words, studio sound, captions) → publish (share +
-// download URLs) → agent job creates N vertical reel compositions → each published →
-// transcript exported → Claude writes LinkedIn posts. Clients chat tweaks from the
-// dashboard; each message becomes an Underlord agent job, then a republish.
+// download URLs) → our own selection layer scores every conversational exchange
+// (emotion, context, dynamics, ICP fit, K-factor) and ranks the best N → an agent
+// job cuts those exact ranges as 9:16 subtitled reels → each published → transcript
+// exported → an LLM writes LinkedIn posts. Clients chat tweaks from the dashboard;
+// each message becomes an Underlord agent job, then a republish.
 //
 // Descript API: https://docs.descriptapi.com (base https://descriptapi.com/v1)
 // All editorial ops go through POST /jobs/agent (natural-language prompt).
@@ -65,7 +67,7 @@ async function dsc(token: string, method: string, path: string, body?: unknown):
 }
 
 // Transcript export returns the file itself, not JSON.
-async function dscTranscript(token: string, project_id: string, composition_id?: string): Promise<string> {
+async function dscTranscript(token: string, project_id: string, composition_id?: string, timed = false): Promise<string> {
   const res = await fetch(`${DSC_BASE}/export/transcript`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -73,7 +75,10 @@ async function dscTranscript(token: string, project_id: string, composition_id?:
       project_id,
       ...(composition_id ? { composition_id } : {}),
       format: "markdown",
-      include_speaker_labels: "changes",
+      // Every speaker turn labelled; timecodes on speakers+paragraphs give the
+      // selection model the anchors it needs to name exact clip ranges.
+      include_speaker_labels: timed ? "every_paragraph" : "changes",
+      ...(timed ? { timecodes: { on_paragraphs: true, on_speakers: true } } : {}),
     }),
   });
   if (!res.ok) throw new DscError(res.status, `transcript export failed: ${(await res.text()).slice(0, 300)}`);
@@ -150,6 +155,66 @@ function reelsPrompt(client: any, episodeName: string, n: number): string {
   ].filter(Boolean).join("\n");
 }
 
+function fmtTc(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// Build the Underlord prompt from clips our own selection layer already chose,
+// so the agent cuts exact ranges instead of guessing what is interesting.
+function timedReelsPrompt(client: any, picks: any[]): string {
+  const lines = picks.map((p: any, i: number) =>
+    `${i + 1}. "Reel ${i + 1} — ${String(p.title ?? "Clip").replace(/"/g, "")}" — from ${fmtTc(p.start_s)} to ${fmtTc(p.end_s)}${p.hook ? ` (opens on: "${String(p.hook).slice(0, 120)}")` : ""}`);
+  return [
+    `Create ${picks.length} NEW separate compositions from this project's main podcast composition. Use EXACTLY these time ranges and names:`,
+    "",
+    ...lines,
+    "",
+    "For every one of these compositions:",
+    "- Vertical portrait format, 1080x1920.",
+    "- Keep the full conversational exchange inside the given range: the hook AND the response that pays it off.",
+    "- Turn on subtitles/captions — bold and readable for sound-off viewing.",
+    "- Remove filler words inside the clip and apply Studio Sound.",
+    "- When several people speak, keep whoever is currently speaking framed and centered.",
+    "- Start immediately on the first words of the range; no intro, no outro, no titles.",
+    "Do not modify the original main composition, and do not create any compositions beyond the ones listed.",
+    client?.target_audience ? `Audience context: ${client.target_audience}.` : "",
+  ].filter(Boolean).join("\n");
+}
+
+// George's reel-selection spec: emotion + context + conversation dynamics + ICP
+// relevance, scored by K-factor, top N ranked, each standing alone as a reel.
+function reelSelectionPrompt(client: any, episodeName: string, transcript: string, n: number, episodeDuration: number): string {
+  return `You are a short-form virality strategist. Below is the timecoded transcript of a podcast episode titled "${episodeName}".
+
+${client?.target_audience ? `ICP / target audience: ${client.target_audience}` : "ICP / target audience: senior professionals in the speaker's industry."}
+${client?.brand_notes ? `Brand and tone notes: ${client.brand_notes}` : ""}
+
+Find up to ${n} of the highest-virality CONVERSATIONAL EXCHANGES to cut as vertical reels.
+The episode is ${Math.round(Number(episodeDuration) || 0)} seconds long, so returning FEWER than ${n} clips is correct and expected when there simply is not enough strong material. Never pad, never overlap, never stretch a weak moment to fill the count.
+
+How to judge every candidate (this is the whole job):
+- EMOTION: tension, surprise, conviction, humour, vulnerability, a strong opinion.
+- CONTEXT: it makes sense with zero knowledge of the rest of the episode.
+- CONVERSATION DYNAMICS: prefer a real exchange — one person makes a statement or asks something that creates intrigue, the other answers and pays it off. A back-and-forth beats an isolated soundbite.
+- ICP RELEVANCE: it speaks to the audience above and their problems.
+- K-FACTOR (0-100): how likely a viewer is to share, save or comment. Weigh hook strength, emotional charge, specificity (numbers, names, stakes), contrarian value, and how quotable the payoff is. Be honest and discriminating — spread the scores, do not give everything 80+.
+
+Hard rules for each clip:
+- 30 to 60 seconds long. Aim for ~45 seconds.
+- Must START on the hook line itself — the first sentence has to earn attention with no setup.
+- Must CONTAIN the response/payoff, so the exchange resolves inside the clip.
+- Use timecodes that exist in the transcript; start_s and end_s are SECONDS from the episode start (integers).
+- Clips must not overlap each other, and must be spread across the episode, not all from one stretch.
+- Never invent words that were not said.
+
+Return ONLY a JSON array of 1 to ${n} objects (as many as genuinely deserve it), ranked by k_factor descending, no markdown fences. Never return an empty array — if the material is weak, still return your single best exchange:
+[{"title":"<3-6 word title>","hook":"<the opening line, verbatim>","why":"<1-2 sentences: why this will travel — name the emotion, the dynamic and the ICP relevance>","k_factor":<0-100 integer>,"start_s":<integer seconds>,"end_s":<integer seconds>,"speakers":"<who speaks, comma separated>","excerpt":"<the key 1-3 lines of the exchange, verbatim>"}]
+
+TRANSCRIPT (timecodes are [HH:MM:SS] or [MM:SS]):
+${transcript}`;
+}
+
 function commandPrompt(text: string): string {
   return [
     "You are helping the owner of this project refine their podcast content. Apply the following request exactly and conservatively — change only what the request asks for, in this project only:",
@@ -177,29 +242,77 @@ TRANSCRIPT:
 ${transcript}`;
 }
 
-// ---------- OpenAI (post writer) ----------
-async function generatePosts(client: any, episode: any, transcript: string): Promise<any[]> {
+// ---------- OpenAI ----------
+function trimTranscript(t: string): string {
+  return t.length > 180_000 ? t.slice(0, 180_000) + "\n[transcript truncated]" : t;
+}
+
+async function llmJsonArray(prompt: string, what: string): Promise<any[]> {
   const apiKey = await cfg("openai_api_key");
   if (!apiKey) throw new Error("openai_api_key not configured (admin: POST /admin/config)");
   const model = (await cfg("openai_model")) || "gpt-5.5";
-  const trimmed = transcript.length > 180_000 ? transcript.slice(0, 180_000) + "\n[transcript truncated]" : transcript;
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: postsPrompt(client, episode.name, trimmed) }],
-    }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(`post generation failed: ${data?.error?.message || res.status}`);
+  if (!res.ok) throw new Error(`${what} failed: ${data?.error?.message || res.status}`);
   const text = data.choices?.[0]?.message?.content ?? "";
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
-  if (start < 0 || end < 0) throw new Error("post generation returned no JSON array");
-  const posts = JSON.parse(text.slice(start, end + 1));
-  if (!Array.isArray(posts) || !posts.length) throw new Error("post generation returned empty array");
-  return posts;
+  if (start < 0 || end < 0) throw new Error(`${what} returned no JSON array`);
+  const arr = JSON.parse(text.slice(start, end + 1));
+  if (!Array.isArray(arr) || !arr.length) throw new Error(`${what} returned an empty array`);
+  return arr;
+}
+
+async function generatePosts(client: any, episode: any, transcript: string): Promise<any[]> {
+  return await llmJsonArray(postsPrompt(client, episode.name, trimTranscript(transcript)), "post generation");
+}
+
+// Score + rank candidate clips, then sanity-check them against George's rules
+// (30-60s, no overlaps, inside the episode) before they reach the editor.
+async function selectReelClips(client: any, episode: any, transcript: string, n: number): Promise<any[]> {
+  const dur = Number(episode.duration_seconds ?? 0);
+  const text = trimTranscript(transcript);
+  let raw: any[];
+  try {
+    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, n, dur), "reel selection");
+  } catch (e) {
+    // A count the episode cannot satisfy makes the model give up; ask for less.
+    const fewer = Math.max(1, Math.floor(n / 2));
+    if (fewer >= n) throw e;
+    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, fewer, dur), "reel selection");
+  }
+  const clean = raw.map((c: any) => {
+    let start = Math.max(0, Math.floor(Number(c.start_s ?? 0)));
+    let end = Math.ceil(Number(c.end_s ?? 0));
+    if (!(end > start)) return null;
+    if (end - start < 20) return null;                 // too short to be a reel
+    if (end - start > 75) end = start + 60;            // clamp overlong picks
+    if (dur > 0 && end > dur) { end = Math.floor(dur); if (end - start < 20) return null; }
+    const k = Math.max(0, Math.min(100, Math.round(Number(c.k_factor ?? 0))));
+    return {
+      title: String(c.title ?? "Clip").slice(0, 120),
+      hook: c.hook ? String(c.hook).slice(0, 400) : null,
+      why: c.why ? String(c.why).slice(0, 600) : null,
+      k_factor: k,
+      start_s: start, end_s: end,
+      speakers: c.speakers ? String(c.speakers).slice(0, 200) : null,
+      excerpt: c.excerpt ? String(c.excerpt).slice(0, 1200) : null,
+    };
+  }).filter(Boolean) as any[];
+
+  clean.sort((a, b) => b.k_factor - a.k_factor);
+  const picked: any[] = [];
+  for (const c of clean) {
+    if (picked.some((p) => c.start_s < p.end_s && p.start_s < c.end_s)) continue; // no overlaps
+    picked.push(c);
+    if (picked.length >= n) break;
+  }
+  if (!picked.length) throw new Error("No usable clips were found in this episode.");
+  return picked.map((c, i) => ({ ...c, rank: i + 1 }));
 }
 
 // ---------- job helpers ----------
@@ -325,13 +438,41 @@ async function advanceJob(job: any, dscStatus: any | null) {
         return;
       }
 
+      // Our own selection layer: score every candidate exchange, keep the best N.
+      if (job.kind === "select_reels") {
+        // Ask only for as many clips as the episode can actually yield without
+        // overlaps (~55s of runway each) — otherwise the model is forced to pad.
+        const dur = Number(episode.duration_seconds ?? 0);
+        const want = Math.min(Math.max(client.reel_count ?? 7, 1), 15);
+        const n = dur > 0 ? Math.max(1, Math.min(want, Math.floor(dur / 55))) : want;
+        const transcript = await dscTranscript(
+          token, episode.descript_project_id, episode.main_composition_id ?? undefined, true);
+        const picks = await selectReelClips(client, episode, transcript, n);
+        // A fresh selection supersedes the previous one for this episode.
+        await supabase.from("ps_reels").delete().eq("episode_id", episode.id);
+        await supabase.from("ps_reels").insert(picks.map((c: any) => ({
+          episode_id: episode.id, title: c.title, status: "selected", sort: c.rank - 1,
+          rank: c.rank, k_factor: c.k_factor, hook: c.hook, why: c.why,
+          start_s: c.start_s, end_s: c.end_s, speakers: c.speakers, excerpt: c.excerpt,
+        })));
+        await updateJob(job.id, { step: "done", result: { selected: picks.length, top_k: picks[0]?.k_factor ?? null } });
+        await logEvent("reels_selected", { episode_id: episode.id, count: picks.length });
+        await enqueue(job.client_id, episode.id, "make_reels");
+        return;
+      }
+
       if (job.kind === "make_reels") {
         const project = await getProject(token, episode.descript_project_id);
         const before = (project.compositions ?? []).map((c: any) => c.id);
-        const n = Math.min(Math.max(client.reel_count ?? 8, 1), 15);
-        const j2 = { ...job, payload: { ...job.payload, before } };
+        const n = Math.min(Math.max(client.reel_count ?? 7, 1), 15);
+        const { data: picks } = await supabase.from("ps_reels").select("*")
+          .eq("episode_id", episode.id).not("start_s", "is", null).order("rank");
+        const j2 = { ...job, payload: { ...job.payload, before, picked_ids: (picks ?? []).map((p: any) => p.id) } };
         await updateJob(job.id, { payload: j2.payload });
-        await startAgentJob(token, j2, reelsPrompt(client, episode.name, n), {
+        // Cut the exact ranges our selection layer chose; only fall back to a
+        // generic "find something good" prompt if no selection exists.
+        const prompt = picks?.length ? timedReelsPrompt(client, picks) : reelsPrompt(client, episode.name, n);
+        await startAgentJob(token, j2, prompt, {
           project_id: episode.descript_project_id, model: client.descript_model,
         });
         return;
@@ -425,11 +566,37 @@ async function advanceJob(job: any, dscStatus: any | null) {
         if (!fresh.length) fresh = (project.compositions ?? []).filter((c: any) => /^reel/i.test(c.name ?? ""));
         if (!fresh.length) { await failJob(job, new Error("The AI finished but no reel compositions were found.")); return; }
         fresh.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
-        const rows = fresh.map((c: any, i: number) => ({
-          episode_id: episode.id, title: c.name ?? `Reel ${i + 1}`, composition_id: c.id, status: "pending", sort: i,
-        }));
-        await supabase.from("ps_reels").upsert(rows, { onConflict: "episode_id,composition_id" });
-        const queue = fresh.map((c: any) => c.id);
+        const pickedIds = (job.payload?.picked_ids ?? []) as string[];
+        let queue: string[] = [];
+        if (pickedIds.length) {
+          // Selection rows already carry rank/K-factor — attach the rendered
+          // compositions to them in rank order instead of creating new rows.
+          const { data: picks } = await supabase.from("ps_reels").select("*").in("id", pickedIds).order("rank");
+          const pairs = Math.min((picks ?? []).length, fresh.length);
+          for (let i = 0; i < pairs; i++) {
+            await supabase.from("ps_reels").update({
+              composition_id: fresh[i].id, title: fresh[i].name ?? picks![i].title, status: "pending",
+            }).eq("id", picks![i].id);
+            queue.push(fresh[i].id);
+          }
+          // Anything the model produced beyond our list, or picks it skipped.
+          for (let i = pairs; i < fresh.length; i++) {
+            await supabase.from("ps_reels").insert({
+              episode_id: episode.id, title: fresh[i].name ?? `Reel ${i + 1}`,
+              composition_id: fresh[i].id, status: "pending", sort: 90 + i,
+            });
+            queue.push(fresh[i].id);
+          }
+          for (let i = pairs; i < (picks ?? []).length; i++) {
+            await supabase.from("ps_reels").delete().eq("id", picks![i].id);
+          }
+        } else {
+          const rows = fresh.map((c: any, i: number) => ({
+            episode_id: episode.id, title: c.name ?? `Reel ${i + 1}`, composition_id: c.id, status: "pending", sort: i,
+          }));
+          await supabase.from("ps_reels").upsert(rows, { onConflict: "episode_id,composition_id" });
+          queue = fresh.map((c: any) => c.id);
+        }
         const first = queue.shift();
         await supabase.from("ps_reels").update({ status: "publishing" }).eq("episode_id", episode.id).eq("composition_id", first);
         await startPublishJob(token, job, episode.descript_project_id, first, { publish_queue: queue });
@@ -488,11 +655,11 @@ async function advanceJob(job: any, dscStatus: any | null) {
         await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
         // Chain the rest of the pipeline.
         const { data: existing } = await supabase.from("ps_jobs").select("id,kind")
-          .eq("episode_id", episode.id).in("kind", ["make_reels", "generate_posts"])
+          .eq("episode_id", episode.id).in("kind", ["select_reels", "make_reels", "generate_posts"])
           .not("step", "in", "(failed,cancelled)");
         const kinds = new Set((existing ?? []).map((x: any) => x.kind));
         if (!kinds.has("generate_posts")) await enqueue(job.client_id, episode.id, "generate_posts");
-        if (!kinds.has("make_reels")) await enqueue(job.client_id, episode.id, "make_reels");
+        if (!kinds.has("select_reels") && !kinds.has("make_reels")) await enqueue(job.client_id, episode.id, "select_reels");
         await logEvent("episode_ready", { episode_id: episode.id, share_url: urls.share_url });
         return;
       }
@@ -651,14 +818,18 @@ async function apiEpisode(client: any, id: string) {
   const { data: e } = await supabase.from("ps_episodes").select("*").eq("id", id).eq("client_id", client.id).maybeSingle();
   if (!e) return null;
   const [{ data: reels }, { data: posts }, { data: commands }, { data: jobs }] = await Promise.all([
-    supabase.from("ps_reels").select("*").eq("episode_id", id).order("sort"),
+    supabase.from("ps_reels").select("*").eq("episode_id", id).order("sort").order("rank", { nullsFirst: false }),
     supabase.from("ps_posts").select("*").eq("episode_id", id).order("sort"),
     supabase.from("ps_commands").select("*").eq("episode_id", id).order("created_at").limit(100),
     supabase.from("ps_jobs").select("id,kind,step,error,created_at,updated_at,result").eq("episode_id", id).order("created_at", { ascending: false }).limit(20),
   ]);
   return {
     episode: episodePublic(e),
-    reels: (reels ?? []).map((r: any) => ({ id: r.id, title: r.title, status: r.status, share_url: r.share_url, download_url: r.download_url, composition_id: r.composition_id })),
+    reels: (reels ?? []).map((r: any) => ({
+      id: r.id, title: r.title, status: r.status, share_url: r.share_url, download_url: r.download_url,
+      composition_id: r.composition_id, rank: r.rank, k_factor: r.k_factor, hook: r.hook, why: r.why,
+      start_s: r.start_s, end_s: r.end_s, speakers: r.speakers, excerpt: r.excerpt,
+    })),
     posts: (posts ?? []).map((p: any) => ({ id: p.id, hook: p.hook, body: p.body, first_comment: p.first_comment, status: p.status })),
     commands: (commands ?? []).map((c: any) => ({ id: c.id, text: c.text, status: c.status, agent_response: c.agent_response, target: c.target, created_at: c.created_at })),
     jobs: jobs ?? [],
@@ -725,7 +896,7 @@ Deno.serve(async (req) => {
           descript_drive_id: drive?.drive_id ?? null,
           descript_drive_name: drive?.drive_name ?? null,
           logo_url: logo_url ?? null, target_audience: target_audience ?? null, brand_notes: brand_notes ?? null,
-          reel_count: reel_count ?? 8, auto_produce: auto_produce ?? false, descript_model: descript_model ?? null,
+          reel_count: reel_count ?? 7, auto_produce: auto_produce ?? false, descript_model: descript_model ?? null,
         }).select().single();
         if (error) return json({ error: error.message }, 400);
         if (descript_token) { try { await discoverClient(data); } catch { /* first discovery is best-effort */ } }
@@ -914,7 +1085,7 @@ Deno.serve(async (req) => {
         const { episode_id } = body;
         const { data: ep } = await supabase.from("ps_episodes").select("*").eq("id", episode_id).eq("client_id", client.id).maybeSingle();
         if (!ep) return json({ error: "not_found" }, 404);
-        const jb = await enqueue(client.id, ep.id, "make_reels");
+        const jb = await enqueue(client.id, ep.id, "select_reels");
         await advanceJob(jb, null);
         return json({ ok: true, job_id: jb.id });
       }

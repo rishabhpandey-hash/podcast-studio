@@ -10,9 +10,10 @@ Agentic podcast production for clients: record once in Descript → get the edit
 1. **Onboarding (one time, admin):** client generates a Descript API token (Descript app → Settings → API tokens, scoped to their Drive) and we store it via `POST /admin/clients`. They get an access-key link to this dashboard.
 2. **Discovery:** every ~5 minutes (and on "Check for new recordings") we list the Drive's projects via `GET /v1/projects` and register new recordings as episodes. With `auto_produce` on, new recordings (created after onboarding) go straight into production.
 3. **Produce:** a Descript **Underlord agent job** (`POST /v1/jobs/agent`) edits the episode — filler words out, dead air cut, Studio Sound, captions. Then `POST /v1/jobs/publish` renders 1080p and returns a share URL + signed download URL.
-4. **Reels:** a second agent job creates N new 1080×1920 vertical compositions (per-client `reel_count`), each published separately.
-5. **LinkedIn posts:** the transcript is exported (`POST /v1/export/transcript`, markdown) and an LLM (OpenAI GPT, `openai_model` config, default gpt-5.5) writes 12 publish-ready posts (hook, body, first comment) tuned to the client's `target_audience` / `brand_notes`.
-6. **Tweaks:** each chat message in the dashboard becomes an agent job (optionally targeted at the main episode or a specific reel via `composition_id`), then a republish — republishing reuses the same share URL.
+4. **Reel selection (`select_reels`):** the timecoded transcript is scored by an LLM on emotion, context, conversation dynamics and ICP relevance, producing a **K-factor (0-100)** per candidate exchange. Server-side rules then enforce 20–75s length, no overlaps, episode bounds, and a count capped by episode length (~55s runway per clip). Picks land in `ps_reels` with `rank`/`k_factor`/`hook`/`why`/`start_s`/`end_s` and are **visible on the dashboard before rendering**.
+5. **Reel cutting (`make_reels`):** one agent job cuts those **exact ranges** as 1080×1920 subtitled compositions (falls back to a generic prompt only if no selection exists), then each is published in rank order.
+6. **LinkedIn posts:** the transcript is exported (`POST /v1/export/transcript`, markdown) and an LLM (OpenAI GPT, `openai_model` config, default gpt-5.5) writes 12 publish-ready posts (hook, body, first comment) tuned to the client's `target_audience` / `brand_notes`.
+7. **Tweaks:** each chat message in the dashboard becomes an agent job (optionally targeted at the main episode or a specific reel via `composition_id`), then a republish — republishing reuses the same share URL.
 
 All async work is a state machine in `ps_jobs` (`queued → agent_running → publishing → done/failed`), advanced by:
 - Descript **per-job callbacks** → `POST /webhook?secret=…&job=<ps_job_id>` (fast path)
@@ -29,7 +30,9 @@ All async work is a state machine in `ps_jobs` (`queued → agent_running → pu
 
 Client (auth `?key=` or `X-Access-Key`):
 - `GET /api/overview` · `GET /api/episode?id=` · `POST /api/refresh`
-- `POST /api/produce {episode_id}` · `POST /api/reels {episode_id}` · `POST /api/posts {episode_id}`
+- `POST /api/produce {episode_id}` · `POST /api/reels {episode_id}` (re-scores + regenerates) · `POST /api/posts {episode_id}`
+- `POST /api/room {url}` (save the standing guest-room link) · `GET /api/whoami`
+- `GET /api/team` · `POST /api/team {email, is_admin}` · `POST /api/team/remove {email}` — email-signed-in admins only
 - `POST /api/command {episode_id, text, target?}` — target `"main"` or a reel `composition_id`
 
 Admin (auth `X-Admin-Secret`):
