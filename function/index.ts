@@ -164,7 +164,8 @@ const REEL_LOUDNESS =
 
 // Trending = the YouTube Shorts / TikTok caption grammar: a couple of words at a
 // time on ONE line, very large, active word popping. Sentence-shaped two-line
-// blocks read as a subtitle track and look dated on short-form.
+// blocks read as a subtitle track and look dated on short-form. Descript exposes
+// no words-per-line setting, so the geometry of the caption box is the lever.
 function captionLine(client: any): string {
   const trending = (client?.caption_style ?? "trending") !== "clean";
   return trending
