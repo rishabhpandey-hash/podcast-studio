@@ -59,22 +59,26 @@ Verified: an already-broken reel was repaired with this exact instruction and th
 
 **Lesson for the two-pager:** Descript's agent does what it is told very literally. First-draft quality comes from prompt specificity, not from extra human passes.
 
-## The production standard (26 Aug) — what "no notes from the client" means
+## The production standard — corrected after the first client review (26 Aug)
 
-The first version only removed filler words and applied Studio Sound, which is why the episode looked like a raw recording. Every produced episode now demands:
+The first attempt only removed filler words, so the episode looked like a raw recording. The **second** attempt over-corrected: constant multicam switching, alternating crops and push-ins on every long stretch. The client's verdict on that cut was blunt — *"looking like a trailer rather than a podcast shoot… video is moving here and there, the screen changing randomly"*. Both failures came from the same prompt, so the standard is now split by format.
 
-**Edit:** filler words, false starts, stumbles and retakes out; word gaps shortened so pacing is crisp; dead air and off-topic housekeeping cut.
-**Vision:** multicam that follows the active speaker with **no static shot longer than ~8 seconds** when another angle exists; framing that alternates wider/tighter (1.05–1.35x) with the eyeline in the upper third; a slow push-in on long single-speaker stretches so the frame is never frozen; clean cuts/short crossfades; full 16:9 frame.
-**Sound:** Studio Sound on every clip, speakers level-matched, and a **royalty-free music bed** ducked under the speech (Subtle / Energetic / None per client).
-**Finishing:** Eye Contact correction, trending captions, branding logo in the chosen corner.
+**The episode is a calm conversation, not a showreel:**
 
-**Captions (both episode and reels):** word-by-word karaoke highlighting, spoken word in a bright accent colour on bold white, heavy sans-serif, dark outline, 3–6 words per line, **max 2 lines**, baseline at 78–82% of frame height. A "Clean" option exists for clients who want understated.
+**Edit:** filler words, false starts, stumbles and retakes out; obviously long silences closed, but the natural rhythm kept — not rushed or clipped; off-topic housekeeping cut.
+**Vision:** the camera shows whoever is speaking and **stays** on them. A cut happens *only* because the speaker changed, never mid-sentence and never for energy. Minimum shot ~5s, one consistent crop per camera, and **no zoom, push-in, Ken Burns drift, pan or scaling of any kind**. Hard cuts only. Full 16:9 frame, and never a multi-camera layout where a feed is dead (that leaves a black panel).
+**Sound:** Studio Sound on every clip, speakers level-matched, and **no music** — the episode carries the conversation only.
+**Finishing:** Eye Contact correction and the branding logo. **No captions** — the episode goes to YouTube, which generates its own subtitles.
 
-**Music is confirmed possible:** Descript's own docs describe Underlord producing clips "complete with music, captions and visual transitions", and the drive has a royalty-free library.
+**Reels keep the social treatment**, because they play muted in-feed and have no auto-captioning: word-by-word karaoke highlighting, spoken word in a bright accent colour on bold white, heavy sans-serif, dark outline, 3–6 words per line, **max 2 lines**, baseline at 78–82% of frame height, plus the music bed (Subtle / Energetic / None per client).
+
+**Lesson:** "make it look produced" is not a spec. Underlord applies whatever intensity the prompt implies, so the prompt has to say how *restrained* to be, not just what to add.
 
 ## The QA pass (the reason a client shouldn't need to send notes)
 
-After the episode is published and **before** reels or posts are built on it, a second agent job re-checks the composition against an 8-point checklist (pacing, multicam coverage, framing variety, full frame, Studio Sound + levels, music level, caption legibility, logo) and **fixes anything that fails**, then re-renders. Its PASS/FIXED report is stored on the episode and shown in the dashboard. Per-client toggle, on by default; a manual "Re-run quality check" button exists too.
+After the episode is published and **before** reels or posts are built on it, a second agent job re-checks the composition against a 9-point checklist (pacing, cuts landing on speaker changes, minimum shot length, no movement inside a shot, full frame, Studio Sound + levels, no music track, no caption track, logo) and **fixes anything that fails**, then re-renders. Its PASS/FIXED report is stored on the episode and shown in the dashboard. Per-client toggle, on by default; a manual "Re-run quality check" button exists too.
+
+**The checklist has to agree with the production brief.** The original QA list demanded "no static shot longer than 8 seconds" and "framing varies between scenes" — so on the trailer-style cut it did exactly what it was told and *added five more scene splits to the intro*. A QA pass that encodes the wrong standard does not catch the defect, it manufactures it. Both prompts are now changed together, and the QA brief opens by stating that removing cuts and movement **is** the fix.
 
 Cost note: this roughly doubles the agent credits per episode (one production pass + one QA pass). That is the trade for a first draft the client accepts.
 
@@ -86,6 +90,29 @@ Proof the pass is not decoration — on a freshly produced 3-camera episode it f
 3. **A black bar on the right of the final scene**, caused by a 3-camera layout left in place where only 2 feeds were live. Lesson now baked into the production brief: never leave a multi-camera layout where a feed is inactive.
 
 It also surfaced one **hard API limit**: music **fade in/out cannot be applied by the agent** — volume keyframe automation needs manual timeline editing. The music itself, its level and speech ducking all work; only the fades don't. We stopped asking for fades so the report no longer carries a permanent "NOT POSSIBLE" line.
+
+## Reel audio: measure it, don't trust it (26 Aug)
+
+The first three real reels looked perfect and were unusable. Measured with `ffmpeg`:
+
+| | Episode | Reel 1 | Reel 2 | Reel 3 |
+|---|---|---|---|---|
+| Integrated loudness | **-13.7 LUFS** | -34.7 | -34.9 | -34.8 |
+| Voice-above-bed spread | 7.7 dB | **3.9 dB** | — | — |
+
+Same conversation, same 43 seconds: the reel's speech came out **21 dB quieter** than the identical speech in the episode, and the gap between speech and the music bed collapsed to under 4 dB, so the voice sat *level with* the music instead of on top of it. Social platforms normalise to roughly -14 LUFS, so these played as near-silence with the music as loud as the speaker. The client heard it immediately: *"the voice coming low as compared to the music"*.
+
+Nothing in the share-link player reveals this — it looked fine and sounded fine at high volume. The reel prompt now states the target explicitly (about -14 LUFS integrated, peaks near -1 dBFS, music 18–20 dB under the speech, and **never** lower the speech to make room for music).
+
+**Verify reels by measurement, not by eye.** Three commands catch what a player cannot:
+
+```bash
+ffprobe -v error -show_entries stream=width,height -of csv=p=0 reel.mp4   # 1080,1920
+ffmpeg -i reel.mp4 -vf "fps=1,cropdetect=limit=24:round=2" -f null -      # want crop=1080:1920:0:0
+ffmpeg -i reel.mp4 -af ebur128=framelog=quiet -f null -                   # want I: about -14 LUFS
+```
+
+`cropdetect` reporting the full frame at offset `0:0` is the definitive proof there is no letterboxing — it is the check that would have caught the original black-bar bug in seconds.
 
 ## Reels: always a choice
 
