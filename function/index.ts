@@ -177,6 +177,7 @@ function captionLine(client: any): string {
       "  - The word currently being spoken pops in a bright accent colour (yellow or green) while the rest of the phrase stays white. The highlight moves word by word, locked to the audio.",
       "  - Centred horizontally, sitting vertically around 70-80% of the frame height: below the face, well clear of the bottom edge, and never covering the speaker's mouth or eyes.",
       "  - No caption background box, no bubble, no panel behind the text.",
+      "  - HOW to get so few words per card: Descript has no words-per-line setting, so control it with the caption layer's geometry. Make the caption text box NARROW (roughly 55-65% of the frame width, not the full width) and cap its height at a SINGLE line, and set the font large enough that only 1 to 3 words fit inside that box. Descript then has to break the speech into many more short caption cards, which is exactly the rapid short-form cadence we want. If a card still shows a whole sentence, the box is too wide or the text is too small.",
     ].join("\n")
     : "- Captions: burned in, clean and understated, bold white sans-serif with a soft shadow, 3 to 6 words per line, two lines maximum, centred, baseline around 78-82% of the frame height, never touching the bottom edge or covering a face.";
 }
@@ -208,10 +209,11 @@ function qaPrompt(client: any, brandFile?: string | null): string {
     "This episode must read as a calm, professionally shot podcast conversation — never as a trailer or a highlight reel. Calm does not mean lifeless: both people must be seen, and it must always be clear who is talking to whom.",
     "",
     "1. No filler words, stumbles, retakes or dead air remain, and the conversation still sounds natural rather than rushed or clipped.",
-    "2. The visible camera is on whoever is speaking, and every cut lands on a speaker change. No cut interrupts a sentence. Whoever asks a question is shown asking it, rather than the question playing over the other person's face.",
+    "2. The visible camera is on whoever is speaking, and every cut lands on a speaker change. No cut interrupts a sentence. Whoever asks a question is shown asking it, rather than the question playing over the other person's face. IMPORTANT EXCEPTION: a brief shot of the person LISTENING during a long answer is a deliberate reaction shot and is correct — keep every one of them. Do not 'fix' a reaction shot by switching it back to the speaker's camera; that is the one case where the listener on screen is intended.",
     "3. No shot is shorter than about 5 seconds, and the episode does not flick between angles for variety. A steady shot of the person speaking is CORRECT — if you find rapid or decorative cutting, remove those cuts and let the shot run.",
     "3b. BOTH people are seen regularly. No stretch longer than about 30 seconds shows only one person's face — where you find one, either switch that stretch to a two-up layout showing both, or add one brief reaction shot of the listener (at least 3 seconds) and return to the speaker. An episode that never shows the interviewer has failed this check.",
-    "4. Nothing MOVES inside a shot: no animated zoom, push-in, Ken Burns drift or pan, and no scale or position that changes while a shot is on screen. Remove movement only. A fixed crop that holds the same value for the whole shot is good framing, not movement — do not reset a steady crop back to the raw camera framing.",
+    "4. Nothing MOVES inside a shot: no animated zoom, push-in, Ken Burns drift or pan, and no scale or position that changes while a shot is on screen. Remove movement only. A fixed crop that holds the same value for the whole shot is good framing, not movement — never reset a steady crop back to the raw camera framing.",
+    "4b. Each person is well framed. If a camera is still at raw framing so the person looks small, off-centre or surrounded by empty room and furniture, set a FIXED crop of about 1.15x to 1.25x on that track which centres them with the eyeline in the upper third. One constant value per camera, held for the whole episode, never animated.",
     "5. The footage fills the entire 16:9 frame: no black bars and no letterboxing. Split and multi-camera layouts are fine and should be KEPT wherever every pane shows a live speaker — only replace a layout when one of its panes is dead or empty, since that is what leaves a black panel.",
     "6. Studio Sound is applied to every clip and all speakers are level-matched.",
     "7. There is NO background music or soundtrack track on the episode. If one exists, remove it.",
@@ -242,7 +244,7 @@ function producePrompt(client: any, brandFile?: string | null): string {
     "- Use a two-up / side-by-side layout showing both people for any genuine back-and-forth or quick exchange. This is the natural default for conversation because it keeps both faces on screen without needing extra cuts.",
     "- If one person speaks for longer than about 30 seconds, cut away once or twice to the person listening so their reaction is visible, then return to the speaker. Hold each of those reaction shots for at least 3 seconds.",
     "- Nothing may MOVE inside a shot: no animated zoom, no push-in, no Ken Burns drift, no panning, and no scale or position that changes while a shot is on screen. The framing must be completely still.",
-    "- Do choose a good fixed crop: a slightly tighter framing held at one constant value for the whole shot is not movement, and it frames the speaker far better than the raw camera. Use one consistent, well-composed crop per camera for the whole episode and do not vary it from scene to scene.",
+    "- FRAME EACH PERSON PROPERLY. The raw camera framing is too loose: people end up small, off-centre, with empty room and furniture around them. For every camera track set a FIXED crop of roughly 1.15x to 1.25x that centres that person horizontally and puts their eyeline in the upper third, so their head and shoulders fill the frame. Set it once per camera, hold that exact value for the whole episode, and never animate it — a constant crop is framing, not movement.",
     "- Simple hard cuts only. No transitions, no effects, no motion graphics, no title cards.",
     "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive — that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
     "",
@@ -749,7 +751,16 @@ async function advanceJob(job: any, dscStatus: any | null) {
 
     // ----- agent job finished -----
     if (job.step === "agent_running") {
-      if (failed) { await failJob(job, new Error(r.error_message || "The AI editor could not complete this request.")); return; }
+      // Credit exhaustion arrives as a failed agent job, not a 402, so the raw
+      // Descript wording would otherwise reach the client unexplained.
+      if (failed) {
+        const raw = String(r.error_message ?? "");
+        const outOfCredits = /insufficient\s+ai\s+credits|out of (ai )?credits|credit balance/i.test(raw);
+        await failJob(job, new Error(outOfCredits
+          ? "The connected Descript plan has run out of AI credits. Top up the plan and press the button again — nothing else was lost."
+          : (raw || "The AI editor could not complete this request.")));
+        return;
+      }
       if (!(await claim(job.id, "agent_running", "advancing"))) return;
       await updateJob(job.id, {
         ai_credits_used: r.ai_credits_used ?? null,
