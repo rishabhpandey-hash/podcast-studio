@@ -164,7 +164,7 @@ const REEL_FRAMING = [
   "- CRITICAL FRAMING: the footage must FILL the entire vertical frame, edge to edge. Scale the widescreen source UP and crop the left and right sides. There must be NO black bars, NO letterboxing at the top or bottom, and no empty space anywhere in the frame. A small 16:9 video floating in the middle of a black portrait canvas is wrong and unusable.",
   "- Frame the person, not the room: the speaker's head and shoulders should fill most of the width, face in the upper-middle of the frame with the eyes roughly a third of the way down, and comfortable headroom. Crop the sides, never crop the face.",
   "- When several people speak, cut to whoever is speaking and re-crop so that person is centred and filling the frame the same way.",
-  "- Captions: burned in, large, bold, centred, sitting in the lower third but clear of the very bottom edge, 3 to 6 words per line, high contrast with a subtle shadow or plate so they stay readable on any background. Captions must never cover the speaker's face.",
+  "- Captions: burned in, large, bold, centred, 3 to 6 words per line, high contrast with a subtle shadow or plate so they stay readable on any background. Place the caption block so its baseline sits around 78-82% of the frame height: clearly inside the lower third, with visible breathing room beneath it, and never touching the bottom edge or covering the speaker's face. Two lines maximum on screen at a time.",
   "- Remove filler words inside the clip and apply Studio Sound.",
   "- Start immediately on the first words of the range: no intro, no outro, no title cards, no fades.",
 ];
@@ -1138,9 +1138,10 @@ Deno.serve(async (req) => {
       if (path === "/api/episode/rename" && req.method === "POST") {
         const name = String(body?.name ?? "").trim().slice(0, 200);
         if (!name) return json({ error: "Give it a title." }, 400);
-        const { error } = await supabase.from("ps_episodes").update({ display_name: name })
-          .eq("id", body?.episode_id ?? "").eq("client_id", client.id);
+        const { data: renamed, error } = await supabase.from("ps_episodes").update({ display_name: name })
+          .eq("id", body?.episode_id ?? "").eq("client_id", client.id).select("id");
         if (error) return json({ error: error.message }, 400);
+        if (!renamed?.length) return json({ error: "not_found" }, 404); // never fake success
         return json({ ok: true });
       }
 
