@@ -59,6 +59,29 @@ Verified: an already-broken reel was repaired with this exact instruction and th
 
 **Lesson for the two-pager:** Descript's agent does what it is told very literally. First-draft quality comes from prompt specificity, not from extra human passes.
 
+## The production standard (26 Aug) — what "no notes from the client" means
+
+The first version only removed filler words and applied Studio Sound, which is why the episode looked like a raw recording. Every produced episode now demands:
+
+**Edit:** filler words, false starts, stumbles and retakes out; word gaps shortened so pacing is crisp; dead air and off-topic housekeeping cut.
+**Vision:** multicam that follows the active speaker with **no static shot longer than ~8 seconds** when another angle exists; framing that alternates wider/tighter (1.05–1.35x) with the eyeline in the upper third; a slow push-in on long single-speaker stretches so the frame is never frozen; clean cuts/short crossfades; full 16:9 frame.
+**Sound:** Studio Sound on every clip, speakers level-matched, and a **royalty-free music bed** ducked under the speech (Subtle / Energetic / None per client).
+**Finishing:** Eye Contact correction, trending captions, branding logo in the chosen corner.
+
+**Captions (both episode and reels):** word-by-word karaoke highlighting, spoken word in a bright accent colour on bold white, heavy sans-serif, dark outline, 3–6 words per line, **max 2 lines**, baseline at 78–82% of frame height. A "Clean" option exists for clients who want understated.
+
+**Music is confirmed possible:** Descript's own docs describe Underlord producing clips "complete with music, captions and visual transitions", and the drive has a royalty-free library.
+
+## The QA pass (the reason a client shouldn't need to send notes)
+
+After the episode is published and **before** reels or posts are built on it, a second agent job re-checks the composition against an 8-point checklist (pacing, multicam coverage, framing variety, full frame, Studio Sound + levels, music level, caption legibility, logo) and **fixes anything that fails**, then re-renders. Its PASS/FIXED report is stored on the episode and shown in the dashboard. Per-client toggle, on by default; a manual "Re-run quality check" button exists too.
+
+Cost note: this roughly doubles the agent credits per episode (one production pass + one QA pass). That is the trade for a first draft the client accepts.
+
+## Reels: always a choice
+
+Clip length adapts to the episode (20–45s on short recordings, 30–60s on real ones), the count targets **at least 3 options** wherever the runtime allows, and regenerating passes the previously offered ranges as a do-not-reuse list so a second pass finds genuinely different moments. Recordings under 25 seconds are skipped with a plain explanation rather than a failure.
+
 ## Our reel-selection layer (added 26 Aug, George's spec)
 
 Descript's agent alone picks clips by vibe. We now score them ourselves first:

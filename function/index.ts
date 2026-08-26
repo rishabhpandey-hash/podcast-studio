@@ -562,6 +562,16 @@ async function advanceJob(job: any, dscStatus: any | null) {
 
       // Our own selection layer: score every candidate exchange, keep the best N.
       if (job.kind === "select_reels") {
+        // Too short to cut anything from: say so plainly instead of failing.
+        const dSec = Number(episode.duration_seconds ?? 0);
+        if (dSec > 0 && dSec < 25) {
+          await updateJob(job.id, {
+            step: "done",
+            result: { skipped: "Recording is too short to cut reels from (under 25 seconds)." },
+          });
+          await logEvent("reels_skipped_short", { episode_id: episode.id, duration: dSec });
+          return;
+        }
         // The client should always have a choice, so aim for several clips: shorter
         // targets on a short episode rather than collapsing to a single reel.
         const dur = Number(episode.duration_seconds ?? 0);
@@ -726,7 +736,10 @@ async function advanceJob(job: any, dscStatus: any | null) {
         const before = new Set((job.payload?.before ?? []) as string[]);
         let fresh = (project.compositions ?? []).filter((c: any) => c.id && !before.has(c.id));
         if (!fresh.length) fresh = (project.compositions ?? []).filter((c: any) => /^reel/i.test(c.name ?? ""));
-        if (!fresh.length) { await failJob(job, new Error("The AI finished but no reel compositions were found.")); return; }
+        if (!fresh.length) {
+          await failJob(job, new Error("The editor did not produce any clips from this recording \u2014 it may be too short or too quiet. Try 'Re-score & regenerate'."));
+          return;
+        }
         fresh.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
         const pickedIds = (job.payload?.picked_ids ?? []) as string[];
         let queue: string[] = [];
