@@ -1007,7 +1007,7 @@ window.STUDIO = {
     if(!state.episodeId) return;
     const btn=$("reelsBtn"); btn.disabled=true;
     try{
-      await api("/api/reels",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
+      await api("/api/reels",{method:"POST",body:JSON.stringify({episode_id:state.episodeId, fresh:true})});
       toast("Scoring the episode for the most viral moments…");
       state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
     }catch(e){ toast(e.message); }

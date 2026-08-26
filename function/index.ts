@@ -579,10 +579,14 @@ async function advanceJob(job: any, dscStatus: any | null) {
         const per = dur > 0 && dur < 420 ? 40 : 55;
         let n = dur > 0 ? Math.max(1, Math.min(want, Math.floor(dur / per))) : want;
         if (n < 3 && dur >= 150) n = Math.min(want, Math.max(n, Math.floor(dur / 35)));
-        // On a regenerate, steer away from the moments already offered.
-        const { data: prior } = await supabase.from("ps_reels").select("start_s,end_s")
-          .eq("episode_id", episode.id).not("start_s", "is", null);
-        const avoid = (prior ?? []).map((r: any) => [Number(r.start_s), Number(r.end_s)] as [number, number]);
+        // Only when the client asked for a different set do we steer away from
+        // what was already offered; a fresh production should pick the best.
+        let avoid: [number, number][] = [];
+        if (job.payload?.avoid_prior) {
+          const { data: prior } = await supabase.from("ps_reels").select("start_s,end_s")
+            .eq("episode_id", episode.id).not("start_s", "is", null);
+          avoid = (prior ?? []).map((r: any) => [Number(r.start_s), Number(r.end_s)] as [number, number]);
+        }
         const transcript = await dscTranscript(
           token, episode.descript_project_id, episode.main_composition_id ?? undefined, true);
         const picks = await selectReelClips(client, episode, transcript, n, avoid);
@@ -841,9 +845,12 @@ async function advanceJob(job: any, dscStatus: any | null) {
         }).eq("id", episode.id);
         await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
         // Chain the rest of the pipeline.
+        // Only skip follow-up work that is already IN FLIGHT. Anything that
+        // finished against a previous edit is stale and must run again, or the
+        // client ends up with reels cut against timings that no longer exist.
         const { data: existing } = await supabase.from("ps_jobs").select("id,kind")
           .eq("episode_id", episode.id).in("kind", ["qa_pass", "select_reels", "make_reels", "generate_posts"])
-          .not("step", "in", "(failed,cancelled)");
+          .not("step", "in", "(done,failed,cancelled)");
         const kinds = new Set((existing ?? []).map((x: any) => x.kind));
         // QA first: the episode the client sees gets checked and fixed before we
         // build anything on top of it.
@@ -1430,7 +1437,7 @@ Deno.serve(async (req) => {
         const { episode_id } = body;
         const { data: ep } = await supabase.from("ps_episodes").select("*").eq("id", episode_id).eq("client_id", client.id).maybeSingle();
         if (!ep) return json({ error: "not_found" }, 404);
-        const jb = await enqueue(client.id, ep.id, "select_reels");
+        const jb = await enqueue(client.id, ep.id, "select_reels", { avoid_prior: !!body?.fresh });
         await advanceJob(jb, null);
         return json({ ok: true, job_id: jb.id });
       }
