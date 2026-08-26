@@ -779,6 +779,51 @@ Deno.serve(async (req) => {
         return json({ client: client.name, email: authn.email ?? null, is_admin: !!authn.is_admin });
       }
 
+      // ----- team management (email-signed-in admins only) -----
+      if (path.startsWith("/api/team")) {
+        if (!authn.email || !authn.is_admin) return json({ error: "Only admins signed in with email can manage the team." }, 403);
+
+        if (path === "/api/team" && req.method === "GET") {
+          const { data } = await supabase.from("ps_users").select("email,label,is_admin,created_at")
+            .eq("client_id", client.id).order("created_at");
+          return json({ team: data ?? [], you: authn.email });
+        }
+
+        if (path === "/api/team" && req.method === "POST") {
+          const email = String(body?.email ?? "").trim().toLowerCase();
+          const label = body?.label ? String(body.label).slice(0, 60) : null;
+          const makeAdmin = !!body?.is_admin;
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
+          const { data: existing } = await supabase.from("ps_users").select("client_id,is_admin").eq("email", email).maybeSingle();
+          if (existing && existing.client_id !== client.id) return json({ error: "That email already belongs to another workspace." }, 400);
+          if (existing?.is_admin && !makeAdmin) {
+            const { count } = await supabase.from("ps_users").select("email", { count: "exact", head: true })
+              .eq("client_id", client.id).eq("is_admin", true);
+            if ((count ?? 0) <= 1) return json({ error: "You can't demote the last admin." }, 400);
+          }
+          const { error } = await supabase.from("ps_users").upsert(
+            { email, client_id: client.id, label, is_admin: makeAdmin }, { onConflict: "email" });
+          if (error) return json({ error: error.message }, 400);
+          await logEvent("team_member_upsert", { by: authn.email, email, is_admin: makeAdmin });
+          return json({ ok: true });
+        }
+
+        if (path === "/api/team/remove" && req.method === "POST") {
+          const email = String(body?.email ?? "").trim().toLowerCase();
+          if (email === authn.email) return json({ error: "You can't remove yourself." }, 400);
+          const { data: row } = await supabase.from("ps_users").select("is_admin,client_id").eq("email", email).maybeSingle();
+          if (!row || row.client_id !== client.id) return json({ error: "not_found" }, 404);
+          if (row.is_admin) {
+            const { count } = await supabase.from("ps_users").select("email", { count: "exact", head: true })
+              .eq("client_id", client.id).eq("is_admin", true);
+            if ((count ?? 0) <= 1) return json({ error: "You can't remove the last admin." }, 400);
+          }
+          await supabase.from("ps_users").delete().eq("email", email).eq("client_id", client.id);
+          await logEvent("team_member_removed", { by: authn.email, email });
+          return json({ ok: true });
+        }
+      }
+
       if (path === "/api/overview" && req.method === "GET") return json(await apiOverview(client));
 
       if (path === "/api/episode" && req.method === "GET") {

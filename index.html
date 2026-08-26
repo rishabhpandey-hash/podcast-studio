@@ -224,7 +224,14 @@ select option{background:#fff;color:var(--ink)}
 .rec-audio-note{background:var(--panel-2);border:1px solid var(--line);border-radius:15px;padding:36px 14px;text-align:center;color:var(--muted)}
 .guest-tip{background:var(--info-soft);border:1px solid #d9d6f7;border-radius:14px;padding:13px 16px;font-size:13.5px;color:var(--muted);line-height:1.55}
 .guest-tip b{color:var(--info)}
-#guestModal{position:fixed;inset:0;background:rgba(6,3,14,.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+#guestModal,#teamModal{position:fixed;inset:0;background:rgba(6,3,14,.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.team-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.team-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:9px 13px;font-size:13.5px}
+.team-row .em{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.team-row .tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--info-soft);color:var(--info);border-radius:99px;padding:2px 9px;flex:none}
+.team-row .you{background:var(--ok-soft);color:var(--ok)}
+.team-row .rm{margin-left:auto;border:none;background:none;color:var(--bad);font-weight:700;padding:4px 8px;flex:none}
+.team-row .rm:hover{background:var(--bad-soft);border:none}
 .roomline{display:flex;gap:8px}
 .roomline input{flex:1;padding:11px 13px;font-size:13.5px;color:var(--muted)}
 .rec-live{color:var(--bad);font-weight:800}
@@ -249,6 +256,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <button id="uploadBtn">⬆ Upload</button>
       <input type="file" id="uploadInput" accept="audio/*,video/*" style="display:none">
       <button id="recordBtn" title="Record with guests — share your studio room link" onclick="STUDIO.openGuest()">🎧 With guests</button>
+      <button id="teamBtn" title="Manage who can access this studio" style="display:none" onclick="STUDIO.openTeam()">👥 Team</button>
       <button id="refreshBtn" title="Check for new recordings">↻</button>
       <button id="signOutBtn" title="Sign out" style="display:none" onclick="STUDIO.signOut()">⎋</button>
     </div>
@@ -412,6 +420,24 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
   </div>
 </div>
 
+<div id="teamModal" style="display:none">
+  <div class="rec-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0;font-size:19px">Team access</h2>
+      <button class="back" onclick="STUDIO.closeTeam()">✕ Close</button>
+    </div>
+    <p class="note" style="margin:0">Everyone here signs in with just their email — no passwords, they get a sign-in link by mail. <b>Admins</b> can also manage this list.</p>
+    <div id="teamList" class="team-list"></div>
+    <div class="roomline">
+      <input id="teamEmail" type="email" placeholder="teammate@company.com" autocomplete="off">
+      <button class="primary" id="teamAddBtn" onclick="STUDIO.addMember()">Add</button>
+    </div>
+    <label class="note" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="teamAdmin" style="width:16px;height:16px;accent-color:#7c3aed"> Make them an admin (can manage this team too)
+    </label>
+  </div>
+</div>
+
 <div id="guestModal" style="display:none">
   <div class="rec-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -452,7 +478,7 @@ const sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, { auth: { flowType:
 const state = {
   key: null, client: null, episodes: [],
   episodeId: null, detail: null, tab: "reels",
-  pollTimer: null, rec: null,
+  pollTimer: null, rec: null, me: null, viaEmail: false,
   q: "", filter: "all", limit: 24,
 };
 
@@ -491,6 +517,7 @@ function show(view){
   const listOnly = view==="listView" ? "" : "none";
   for(const id of ["recHereBtn","uploadBtn","recordBtn","refreshBtn"]) $(id).style.display = listOnly;
   $("signOutBtn").style.display = view!=="loginView" && state.viaEmail ? "" : "none";
+  $("teamBtn").style.display = view==="listView" && state.me?.is_admin ? "" : "none";
 }
 
 function renderHeader(){
@@ -746,7 +773,7 @@ window.STUDIO = {
   async signOut(){
     try{ await sb.auth.signOut(); }catch{}
     localStorage.removeItem("ps_key");
-    state.key = null; state.viaEmail = false; state.client = null; state.episodes = [];
+    state.key = null; state.viaEmail = false; state.client = null; state.episodes = []; state.me = null;
     const u = new URL(location); u.searchParams.delete("key"); history.replaceState(null,"",u);
     this.backToEmail(); show("loginView");
   },
@@ -830,6 +857,50 @@ window.STUDIO = {
   },
 
   suggest(text){ $("chatInput").value = text; $("chatInput").focus(); },
+
+  // ---- team management (admins) ----
+  async openTeam(){
+    $("teamModal").style.display = "flex";
+    await this._loadTeam();
+  },
+  closeTeam(){ $("teamModal").style.display = "none"; },
+  async _loadTeam(){
+    try{
+      const r = await api("/api/team");
+      const list = $("teamList"); list.innerHTML = "";
+      for(const m of r.team){
+        const row = document.createElement("div");
+        row.className = "team-row";
+        const isYou = m.email === r.you;
+        row.innerHTML = `
+          <span class="em">${esc(m.email)}</span>
+          ${m.is_admin?`<span class="tag">Admin</span>`:""}
+          ${isYou?`<span class="tag you">You</span>`:""}
+          ${!isYou?`<button class="rm" title="Remove access" onclick="STUDIO.removeMember('${esc(m.email)}')">✕</button>`:""}`;
+        list.appendChild(row);
+      }
+    }catch(e){ toast(e.message); this.closeTeam(); }
+  },
+  async addMember(){
+    const email = $("teamEmail").value.trim().toLowerCase();
+    if(!email) return toast("Enter their email first");
+    const btn = $("teamAddBtn"); btn.disabled = true;
+    try{
+      await api("/api/team",{method:"POST",body:JSON.stringify({ email, is_admin: $("teamAdmin").checked })});
+      $("teamEmail").value=""; $("teamAdmin").checked=false;
+      toast(`${email} can now sign in with their email`);
+      await this._loadTeam();
+    }catch(e){ toast(e.message); }
+    btn.disabled = false;
+  },
+  async removeMember(email){
+    if(!confirm(`Remove access for ${email}?`)) return;
+    try{
+      await api("/api/team/remove",{method:"POST",body:JSON.stringify({ email })});
+      toast(`${email} removed`);
+      await this._loadTeam();
+    }catch(e){ toast(e.message); }
+  },
 
   // ---- guest room sharing ----
   openGuest(){
@@ -1028,6 +1099,8 @@ $("emailInput")?.addEventListener("keydown", e=>{ if(e.key==="Enter") STUDIO.ema
     try{
       const o = await api("/api/overview");
       state.client=o.client; state.episodes=o.episodes;
+      state.me = await api("/api/whoami").catch(()=>null);
+      if(state.me?.email) $("signOutBtn").title = `Sign out (${state.me.email})`;
       history.replaceState(null,"",location.pathname + location.search);
       show("listView"); renderList(); schedulePoll();
       return;
