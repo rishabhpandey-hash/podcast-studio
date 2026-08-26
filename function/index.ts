@@ -228,7 +228,7 @@ function qaPrompt(client: any, brandFile?: string | null): string {
 function producePrompt(client: any, brandFile?: string | null): string {
   const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
   return [
-    "You are producing a recorded podcast episode into a finished, publish-ready video. It must look like a calm, professionally shot podcast conversation. It must NOT look like a trailer, a promo or a highlight reel. Work on the main (longest) video composition of this project.",
+    "You are producing a recorded podcast episode into a finished, publish-ready video. It must look like a calm, professionally shot interview podcast. It must NOT look like a trailer, a promo or a highlight reel. Work on the main (longest) video composition of this project.",
     "",
     "TIGHTEN THE EDIT:",
     "- Remove every filler word (um, uh, like, you know), false start, stumble and repeated sentence.",
