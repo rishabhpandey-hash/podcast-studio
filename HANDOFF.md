@@ -4,7 +4,7 @@ Read `docs/descript-capabilities.md` and the `podcast-studio-project` memory fir
 
 ## Live now
 - Dashboard: https://rishabhpandey-hash.github.io/podcast-studio/ (email sign-in; owners = rishabh.pandey@knorish.com, george.r@knorish.com)
-- Backend: Supabase project `mgnjlymtjmcoskqinhid`, edge function `studio` **v18**, tables `ps_*`, pg_cron `studio-minute-runner`
+- Backend: Supabase project `mgnjlymtjmcoskqinhid`, edge function `studio` **v22**, tables `ps_*`, pg_cron `studio-minute-runner`
 - Pilot client: Edbound (`b24f5d3a-7426-4335-9d2a-2a434c5cec53`), Descript drive "George's Drive" connected, OpenAI key set (gpt-5.5)
 - Repo: https://github.com/rishabhpandey-hash/podcast-studio (local `~/projects/podcast-studio`)
 
@@ -15,7 +15,9 @@ record/upload → discover → (branding import) → **produce** → publish →
 
 The client rejected the first real episode: *"looking like a trailer rather than a podcast shoot… the screen changing randomly"* and *"the voice coming low as compared to the music"*. The episode and the reels are now deliberately different products.
 
-**Episode** — calm conversation. Cuts land only on speaker changes, never mid-sentence, minimum ~5s shots, one fixed crop per camera, **no zoom / push-in / Ken Burns / pan of any kind**. **No music. No captions** (it goes to YouTube, which auto-generates them).
+**Episode** — a calm interview podcast. Its **default look is a side-by-side two-up: host on the LEFT, guest on the RIGHT**, both on screen, positions fixed for the whole episode (a third person gets an equal-width group layout, host still left-most). Single full-frame shots are the exception, used only when a moment earns being closer. Minimum ~5s shots, a fixed 1.15–1.25x crop per camera, **no zoom / push-in / Ken Burns / pan of any kind**. **No music. No captions** (it goes to YouTube, which auto-generates them).
+
+The two-up is what makes it read as an interview and is why the single-speaker cut felt dead — with both faces permanently visible you never lose who is asking and who is answering, and no extra cutting is needed to keep it alive.
 
 **Reels** — social treatment. Karaoke captions and a music bed stay, because reels play muted in-feed and have no auto-captioning.
 
@@ -65,6 +67,6 @@ If it does not work, the options are: accept 2-line karaoke captions as Descript
 
 ## Immediately next
 1. Top up Descript AI credits, then press Produce on the Convergence episode and measure.
-2. Verify the two untested v21 changes: is a fixed crop actually applied, and do reaction shots survive QA?
+2. Verify the untested v21/v22 changes: does the side-by-side two-up actually become the default layout, is a fixed crop applied, and do the Shorts-style captions land?
 3. Set a branding logo for Edbound in ⚙ Settings to test the logo overlay path end to end.
 4. Turn on auto-produce for the first real client at onboarding.
