@@ -44,8 +44,27 @@ npm install typescript@5.6.3
 npx tsc --noEmit --skipLibCheck --target ES2022 --lib ES2022,DOM --moduleResolution Bundler stubs.d.ts index.ts
 ```
 
+## BLOCKED: the Descript drive is out of AI credits (26 Aug)
+
+`make_reels` failed with *"Insufficient AI credits to complete the request"*. **Nothing agent-driven can run until the plan is topped up** — no produce, no QA, no reels. Usage on this drive: 208 credits on 25 Aug, 692 on 26 Aug. A single production pass is 40–90 credits and QA adds ~30, so iterating on prompts is expensive; change the prompt once, run once, measure.
+
+**When credits are back**, one click of Produce on the Convergence episode exercises everything that is fixed but never yet tested end to end: the required fixed crop, protected reaction shots, and the Shorts caption geometry.
+
+State of that episode right now: the **episode itself is good** (no music, no captions, -14.0 LUFS, full 16:9, host visible, 8 cuts) but the framing is still raw-camera loose and QA had stripped two reaction shots before v21 protected them. **Reels are selected but not rendered** — `select_reels` replaces prior picks, so the two reels that had already rendered correctly are no longer listed. Their compositions still exist and Descript share links are permanent:
+
+- Reel 1 — AI Slop Is Common · comp `90672bfb-64bd-4454-afed-931a16a70f31` · https://share.descript.com/view/669jbhGrtBI
+- Reel 2 — Content Got Commoditized · comp `3c593208-0747-489c-bf52-019b285342a5` · https://share.descript.com/view/FmAXWtPZTpZ
+
+Both measured correctly (-14.3 and -13.7 LUFS, 1080x1920, `crop=0:0`) but carry the old sentence-block captions.
+
+## Known limitation: Shorts-style captions may not be reachable
+
+Descript exposes font, size, alignment, colours, borders, active/future word styling and placement — but **no words-per-line, max-lines or caption-box-width setting**, and "one word on screen at a time" is an [open feature request since Nov 2020](https://feedback.descript.com/features/p/captions-word-one-the-screen). v21 tries the only available lever (narrow caption box + single-line height + large text, so Descript must split into more cards). **This is untested** — credits ran out before it rendered.
+
+If it does not work, the options are: accept 2-line karaoke captions as Descript's ceiling; burn our own captions after render (needs word-level timings, which Descript does not expose — Whisper via the existing OpenAI key could supply them, but the pipeline runs on Edge Functions and cannot run ffmpeg, so this needs a media worker); or use a dedicated captioning tool for the reel stage.
+
 ## Immediately next
-1. The Convergence episode (`c3480cf6-9d46-4923-b2e3-20435ecb436c`) was re-produced under v18 — confirm the published cut and the new reels measure correctly (cuts, no music, no captions, reels at ~-14 LUFS).
-2. Set a branding logo for Edbound in ⚙ Settings to test the logo overlay path end to end.
-3. Turn on auto-produce for the first real client at onboarding.
-4. Open question for the client: captions on reels are currently ON. Confirm that is wanted.
+1. Top up Descript AI credits, then press Produce on the Convergence episode and measure.
+2. Verify the two untested v21 changes: is a fixed crop actually applied, and do reaction shots survive QA?
+3. Set a branding logo for Edbound in ⚙ Settings to test the logo overlay path end to end.
+4. Turn on auto-produce for the first real client at onboarding.
