@@ -70,9 +70,21 @@ The first attempt only removed filler words, so the episode looked like a raw re
 **Sound:** Studio Sound on every clip, speakers level-matched, and **no music** — the episode carries the conversation only.
 **Finishing:** Eye Contact correction and the branding logo. **No captions** — the episode goes to YouTube, which generates its own subtitles.
 
-**Reels keep the social treatment**, because they play muted in-feed and have no auto-captioning: word-by-word karaoke highlighting, spoken word in a bright accent colour on bold white, heavy sans-serif, dark outline, 3–6 words per line, **max 2 lines**, baseline at 78–82% of frame height, plus the music bed (Subtle / Energetic / None per client).
+### …but calm is not the same as dead (third correction, same day)
 
-**Lesson:** "make it look produced" is not a spec. Underlord applies whatever intensity the prompt implies, so the prompt has to say how *restrained* to be, not just what to add.
+The calm cut was rejected too: *"video is dead, the person who is asking the question is not getting visible properly"*. "Stay on the speaker" had produced an **85-second unbroken shot of the guest with the host never on screen**, and the QA pass had stripped the one two-up scene that kept both faces in frame. Restraint alone is not the goal — the viewer has to see the conversation.
+
+So the brief now also **requires** that:
+- whoever asks a question is **cut to and shown asking it**, never a question playing over the other person's face;
+- a **two-up / side-by-side layout** is the natural default for real back-and-forth, since it keeps both faces on screen without adding a single cut;
+- any monologue longer than ~30s gets **one or two reaction cutaways** to the listener (≥3s each);
+- QA item 3b fails any stretch over ~30s that shows only one person.
+
+The two failure modes are opposite and the prompt has to hold both fences at once: *no decorative cutting* **and** *never let one face own the screen*.
+
+**Reels keep the social treatment**, because they play muted in-feed and have no auto-captioning. Captions follow the **YouTube Shorts / TikTok grammar**, which is not the same as subtitles: **1–3 words on screen at a time on a single line**, spanning 60–80% of the frame width, heavy condensed all-caps, thick dark outline, the spoken word popping in a bright accent colour, sitting at 70–80% frame height with no background box. Our first attempt specified "3–6 words per line, max 2 lines" and produced 3–4 line sentence blocks that read as a subtitle track — correct as subtitles, wrong for short-form. Plus the music bed (Subtle / Energetic / None per client).
+
+**Lesson:** "make it look produced" is not a spec, and neither is "make it calm". Underlord applies exactly the intensity the prompt implies, so the prompt has to fence in *both* directions — how restrained to be, and what must never be lost.
 
 ## The QA pass (the reason a client shouldn't need to send notes)
 
