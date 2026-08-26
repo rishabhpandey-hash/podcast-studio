@@ -245,6 +245,9 @@ select option{background:#fff;color:var(--ink)}
 .chk input{width:16px;height:16px;accent-color:#7c3aed}
 #clientPicker{padding:9px 12px;font-size:13.5px;max-width:190px;font-weight:600}
 .tx{white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:62vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.qa{margin-top:14px;background:var(--ok-soft);border:1px solid #cfe9db;border-radius:12px;padding:10px 14px;font-size:13px}
+.qa summary{cursor:pointer;font-weight:700;color:var(--ok)}
+.qa pre{white-space:pre-wrap;font:inherit;color:var(--muted);margin:10px 0 0}
 .rowacts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .rowacts button{font-size:11.5px;padding:5px 10px;border-radius:99px;color:var(--muted)}
 .pedit{width:100%;min-height:150px;padding:12px;font:inherit;font-size:14px;line-height:1.6}
@@ -351,6 +354,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
         <div class="steps" id="dSteps"></div>
         <div id="dError"></div>
         <div class="videobar" id="dActions"></div>
+        <div id="dQa"></div>
         <div id="dProgress"></div>
       </div>
     </div>
@@ -365,7 +369,7 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
 
     <div id="tab-reels">
       <div class="section-tools">
-        <span class="note">The 7 highest-virality conversational moments, scored and ranked by K-factor — each a standalone 9:16 clip with subtitles.</span>
+        <span class="note">Several ready-to-post options, scored and ranked by K-factor — full-frame 9:16 with trending captions and music. Pick the ones you like, discard the rest, or regenerate for a fresh set.</span>
         <div class="spacer"></div>
         <button id="reelsBtn" onclick="STUDIO.makeReels()">✨ Re-score & regenerate</button>
       </div>
@@ -489,6 +493,20 @@ footer{margin-top:60px;color:var(--dim);font-size:12.5px;text-align:center}
       <label class="fl" style="flex:1">Logo corner
         <select id="setMarkPos"><option value="top-right">Top right</option><option value="top-left">Top left</option></select></label>
     </div>
+    <div class="frow">
+      <label class="fl" style="flex:1">Background music
+        <select id="setMusic">
+          <option value="subtle">Subtle bed under the voices</option>
+          <option value="energetic">Energetic (punchier reels)</option>
+          <option value="none">No music</option>
+        </select></label>
+      <label class="fl" style="flex:1">Caption style
+        <select id="setCaps">
+          <option value="trending">Trending — bold, word-by-word highlight</option>
+          <option value="clean">Clean and understated</option>
+        </select></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="setQa" checked> Run an automatic quality check on every episode and fix what it finds <span class="note">(recommended)</span></label>
     <label class="chk"><input type="checkbox" id="setAuto"> Produce new recordings automatically (no clicking Produce)</label>
     <label class="fl">Recording account connection (Descript API token — paste to replace)
       <input id="setToken" placeholder="leave blank to keep the current connection"></label>
@@ -765,10 +783,14 @@ function renderDetail(){
   if(e.embed_url||e.share_url) actions.push(`<button class="primary" onclick="STUDIO.playEpisode()">▶ Watch episode</button>`);
   if(e.download_url) actions.push(`<a href="${esc(e.download_url)}" target="_blank" rel="noopener"><button>⬇ Download video</button></a>`);
   if(e.status==="new"||e.status==="failed") actions.push(`<button class="primary" onclick="STUDIO.produce()">✨ Produce this episode</button>`);
+  if(e.status==="ready") actions.push(`<button onclick="STUDIO.runQa()" title="Re-check the episode against the quality standard and fix anything missing">🔍 Re-run quality check</button>`);
   actions.push(`<button onclick="STUDIO.renameEpisode()">✎ Rename</button>`);
   if(e.share_url) actions.push(`<a href="${esc(e.share_url)}" target="_blank" rel="noopener"><button>Share link</button></a>`);
   $("dActions").innerHTML = actions.join(" ");
 
+  $("dQa").innerHTML = e.qa_report
+    ? `<details class="qa"><summary>✅ Quality check passed${e.qa_at?` · ${fmtDate(e.qa_at)}`:""}</summary><pre>${esc(e.qa_report)}</pre></details>`
+    : "";
   const active = (d.jobs||[]).find(j=>!["done","failed","cancelled"].includes(j.step));
   $("dProgress").innerHTML = active ? `<span class="progressline"><span class="eq live" style="height:12px"><i></i><i></i><i></i><i></i><i></i></span>${esc(currentActivityLabel(active))}</span>` : "";
 
@@ -859,7 +881,7 @@ function renderDetail(){
   // activity
   const jl = $("jobList");
   jl.innerHTML = (d.jobs||[]).map(j=>{
-    const label = {produce_main:"Produce episode", select_reels:"Pick the best clips (AI scoring)", make_reels:"Cut & render reels", generate_posts:"Write LinkedIn posts", command:"Your request", import:"Import recording"}[j.kind]||j.kind;
+    const label = {produce_main:"Produce episode", qa_pass:"Quality check & fix", select_reels:"Pick the best clips (AI scoring)", make_reels:"Cut & render reels", generate_posts:"Write LinkedIn posts", command:"Your request", import:"Import recording"}[j.kind]||j.kind;
     return `<div><span class="t">${esc(new Date(j.created_at).toLocaleString())}</span> <span>${esc(label)}</span> ${badge(j.step)} ${j.error?`<span class="note">${esc(j.error)}</span>`:""}</div>`;
   }).join("") || `<div class="note">Nothing yet.</div>`;
 
@@ -869,7 +891,7 @@ function renderDetail(){
 function currentActivityLabel(job){
   const prog = job.result?.progress;
   const pct = prog?.percent!=null ? ` (${Math.round(prog.percent)}%)` : "";
-  const what = {produce_main:"Producing the episode", select_reels:"Scoring the best moments for reels", make_reels:"Cutting and rendering your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request", import:"Importing your recording"}[job.kind]||"Working";
+  const what = {produce_main:"Producing the episode", qa_pass:"Running the quality check", select_reels:"Scoring the best moments for reels", make_reels:"Cutting and rendering your reels", generate_posts:"Writing LinkedIn posts", command:"Applying your request", import:"Importing your recording"}[job.kind]||"Working";
   const stage = job.step==="publishing" ? " — rendering video" : (prog?.label?` — ${prog.label}`:"");
   return `${what}${stage}${pct} · updates automatically`;
 }
@@ -1005,6 +1027,15 @@ window.STUDIO = {
 
   suggest(text){ $("chatInput").value = text; $("chatInput").focus(); },
 
+  async runQa(){
+    if(!state.episodeId) return;
+    try{
+      await api("/api/qa",{method:"POST",body:JSON.stringify({episode_id:state.episodeId})});
+      toast("Quality check running — it fixes what it finds and re-renders");
+      state.detail = await api(`/api/episode?id=${state.episodeId}`); renderDetail(); schedulePoll();
+    }catch(e){ toast(e.message); }
+  },
+
 
   // ---- inline player (Descript /embed is frame-safe; /view is not) ----
   _play(title, embed, dl, vertical){
@@ -1133,6 +1164,9 @@ window.STUDIO = {
       $("setMark").value = st.watermark_url || "";
       $("setMarkPos").value = st.watermark_position || "top-right";
       $("setAuto").checked = !!st.auto_produce;
+      $("setMusic").value = st.music_style || "subtle";
+      $("setCaps").value = st.caption_style || "trending";
+      $("setQa").checked = st.qa_pass !== false;
       $("setToken").value = "";
       $("setStatus").textContent = st.connected ? "" : "Recording account not connected yet.";
     }catch(e){ $("setStatus").textContent = e.message; }
@@ -1145,6 +1179,8 @@ window.STUDIO = {
       intro_notes: $("setIntro").value, reel_count: Number($("setReels").value) || 7,
       watermark_url: $("setMark").value.trim(), watermark_position: $("setMarkPos").value,
       auto_produce: $("setAuto").checked,
+      music_style: $("setMusic").value, caption_style: $("setCaps").value,
+      qa_pass: $("setQa").checked,
     };
     if($("setToken").value.trim()) payload.descript_token = $("setToken").value.trim();
     try{

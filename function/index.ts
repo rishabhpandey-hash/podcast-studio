@@ -140,34 +140,95 @@ async function isAdmin(req: Request, url: URL): Promise<boolean> {
 }
 
 // ---------- prompts ----------
+
+function musicLine(client: any, forReel: boolean): string {
+  const m = client?.music_style ?? "subtle";
+  if (m === "none") return "";
+  const energy = m === "energetic"
+    ? (forReel ? "an upbeat, driving track that suits a punchy social clip" : "a light, modern track with gentle energy")
+    : "an understated, tasteful track that sits far behind the voices";
+  return `- Add background music from Descript's royalty-free library: ${energy}. Keep it clearly under the speech at all times (duck it whenever anyone talks), fade it in at the start and out at the end, and never let it compete with the dialogue.`;
+}
+
+function captionLine(client: any): string {
+  const trending = (client?.caption_style ?? "trending") !== "clean";
+  return trending
+    ? "- Captions in the modern social style: burned in, with word-by-word karaoke highlighting where the word currently being spoken is emphasised in a bright accent colour against bold white text. Heavy sans-serif face, never thin or light weights, with a subtle dark outline or shadow so it reads on any background. Large enough to read on a phone at arm's length. 3 to 6 words per line, two lines maximum on screen at once, centred. Place the caption block so its baseline sits around 78-82% of the frame height: clearly inside the lower third, with breathing room beneath it, never touching the bottom edge and never covering a face."
+    : "- Captions: burned in, clean and understated, bold white sans-serif with a soft shadow, 3 to 6 words per line, two lines maximum, centred, baseline around 78-82% of the frame height, never touching the bottom edge or covering a face.";
+}
+
+function reelFraming(client: any, shortEpisode: boolean): string[] {
+  return [
+    "- Canvas: vertical 1080x1920 (9:16).",
+    "- CRITICAL FRAMING: the footage must FILL the entire vertical frame, edge to edge. Scale the widescreen source UP and crop the left and right sides. There must be NO black bars, NO letterboxing at the top or bottom, and no empty space anywhere in the frame. A small 16:9 video floating in the middle of a black portrait canvas is wrong and unusable.",
+    "- Frame the person, not the room: the speaker's head and shoulders should fill most of the width, face in the upper-middle of the frame with the eyes roughly a third of the way down, and comfortable headroom. Crop the sides, never crop the face.",
+    "- When several people speak, cut to whoever is speaking and re-crop so that person is centred and filling the frame the same way.",
+    captionLine(client),
+    "- Cut hard into the first word with no fade in, and end cleanly on the last word.",
+    "- Remove filler words and dead air inside the clip so it never drags, and apply Studio Sound.",
+    "- Add a subtle push-in on the strongest line so the frame is never static for the whole clip.",
+    musicLine(client, true),
+    `- Length: ${shortEpisode ? "20 to 45 seconds" : "30 to 60 seconds"} \u2014 whatever makes the moment land without padding.`,
+    "- No intro, no outro, no title cards, no stock footage.",
+  ].filter(Boolean);
+}
+
+// After production, verify the result against the standard the client will judge
+// it by and fix whatever is missing. This is the pass that stops half-finished
+// work reaching a client.
+function qaPrompt(client: any, brandFile?: string | null): string {
+  const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
+  const music = (client?.music_style ?? "subtle") !== "none";
+  return [
+    "Quality-check the main (longest) video composition of this project against the checklist below. For every item: if it is already satisfied, leave it alone; if it is NOT satisfied, fix it now.",
+    "",
+    "1. No filler words, stumbles, retakes or dead air remain, and the pacing feels crisp.",
+    "2. If multiple cameras or speaker tracks exist, the visible camera follows the active speaker across the whole timeline, with no static shot held longer than about 8 seconds.",
+    "3. Framing varies between scenes and no stretch is completely frozen; faces are well framed with the eyeline in the upper third.",
+    "4. The footage fills the entire 16:9 frame: no black bars, no letterboxing, no empty space.",
+    "5. Studio Sound is applied to every clip and all speakers are level-matched.",
+    music ? "6. Background music is present, sits clearly under the speech, and fades in and out." : "6. There is no unintended background music or noise.",
+    "7. Captions are burned in, bold, readable on a phone, correctly timed, two lines maximum, and never cover a face or touch the bottom edge.",
+    brandFile ? `8. The branding image "${brandFile}" is visible in the ${pos} corner for the whole episode and covers nothing important.` : "8. No stray overlays or leftover graphics remain.",
+    "",
+    "Then reply with one short line per item saying PASS or FIXED (naming what you changed). If something genuinely cannot be done with this footage, say NOT POSSIBLE and why.",
+  ].filter(Boolean).join("\n");
+}
 function producePrompt(client: any, brandFile?: string | null): string {
   const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
   return [
-    "You are producing a podcast episode recording so it is ready to publish. Work on the main (longest) video composition of this project:",
-    "1. Remove all filler words (um, uh, like, you know) and awkward false starts.",
-    "2. Cut long silences and dead air, keeping the conversation natural.",
-    "3. Apply Studio Sound to every clip so the audio is clean and consistent.",
-    "4. Add tasteful, readable captions.",
-    "5. If the recording has more than one camera or speaker track, set up automatic multicam: switch the visible camera to whoever is actively speaking, creating scenes across the whole timeline. When two people are talking over each other or reacting, a shared/side-by-side view is fine.",
-    "6. Add subtle dynamic camera work: vary the zoom slightly between scenes (roughly 1.1x to 1.35x) with the focal point a little above centre so faces stay well framed. Keep it tasteful, never jumpy.",
+    "You are producing a recorded podcast episode into a finished, publish-ready video. The result must look like a professionally edited show, not a raw recording. Work on the main (longest) video composition of this project.",
+    "",
+    "TIGHTEN THE EDIT:",
+    "- Remove every filler word (um, uh, like, you know), false start, stumble and repeated sentence.",
+    "- Remove retakes, keeping the best take of anything said twice.",
+    "- Shorten the gaps between words and sentences so the pacing feels crisp, and cut all dead air and long pauses.",
+    "- Cut throat-clearing, background chatter and any off-topic housekeeping at the start or the end.",
+    "",
+    "MAKE IT VISUALLY ALIVE (this is what separates a finished show from a static talking head):",
+    "- If there is more than one camera or speaker track, set up automatic multicam: the visible camera must follow whoever is speaking, with scenes across the entire timeline. Never hold one static shot for more than about 8 seconds when another angle exists; cut on speaker changes and on reactions.",
+    "- Vary the framing between scenes: alternate slightly wider and tighter crops (roughly 1.05x to 1.35x) with the focal point a little above centre so faces stay well framed and the eyeline sits in the upper third.",
+    "- On any long single-speaker stretch, add a slow, subtle push-in or Ken Burns style drift so the frame is never frozen.",
+    "- Use clean, quick transitions between scenes: simple cuts, or a short crossfade where it genuinely helps. Nothing flashy.",
+    "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space.",
+    "",
+    "MAKE IT SOUND PROFESSIONAL:",
+    "- Apply Studio Sound to every clip so voices are clean, warm and level-matched across speakers.",
+    "- Balance the speakers against each other so nobody is noticeably louder or quieter.",
+    musicLine(client, false),
+    "",
+    "FINISHING:",
+    captionLine(client),
+    "- Apply Eye Contact correction to the speaker tracks if the footage supports it, so speakers appear to look at the camera.",
     brandFile
-      ? `7. The image "${brandFile}" has been added to this project. Place it as a small persistent branding overlay in the ${pos} corner, about 8-10% of the frame width, with a comfortable margin from the edges, visible for the entire episode. Do not let it cover faces or captions.`
+      ? `- The image "${brandFile}" is in this project. Place it as a small persistent branding overlay in the ${pos} corner, about 8-10% of the frame width, inside a comfortable safe margin, visible for the entire episode, never covering a face or the captions.`
       : "",
-    "Do not change the order of the conversation, do not remove substantive content, and do not add music.",
-    "Keep the composition's existing name.",
+    "",
+    "Do not reorder the conversation, do not remove substantive content, and do not add stock footage or b-roll. Keep the composition's existing name.",
     client?.intro_notes ? `Extra production notes from the client: ${client.intro_notes}` : "",
   ].filter(Boolean).join("\n");
 }
 
-const REEL_FRAMING = [
-  "- Canvas: vertical 1080x1920 (9:16).",
-  "- CRITICAL FRAMING: the footage must FILL the entire vertical frame, edge to edge. Scale the widescreen source UP and crop the left and right sides. There must be NO black bars, NO letterboxing at the top or bottom, and no empty space anywhere in the frame. A small 16:9 video floating in the middle of a black portrait canvas is wrong and unusable.",
-  "- Frame the person, not the room: the speaker's head and shoulders should fill most of the width, face in the upper-middle of the frame with the eyes roughly a third of the way down, and comfortable headroom. Crop the sides, never crop the face.",
-  "- When several people speak, cut to whoever is speaking and re-crop so that person is centred and filling the frame the same way.",
-  "- Captions: burned in, large, bold, centred, 3 to 6 words per line, high contrast with a subtle shadow or plate so they stay readable on any background. Place the caption block so its baseline sits around 78-82% of the frame height: clearly inside the lower third, with visible breathing room beneath it, and never touching the bottom edge or covering the speaker's face. Two lines maximum on screen at a time.",
-  "- Remove filler words inside the clip and apply Studio Sound.",
-  "- Start immediately on the first words of the range: no intro, no outro, no title cards, no fades.",
-];
 
 function brandLine(client: any, brandFile?: string | null): string {
   if (!brandFile) return "";
@@ -175,11 +236,11 @@ function brandLine(client: any, brandFile?: string | null): string {
   return `- Place the image "${brandFile}" as a small logo in the ${pos} corner at about 10% of the frame width, inside a comfortable safe margin, visible for the whole clip and never covering a face or the captions.`;
 }
 
-function reelsPrompt(client: any, episodeName: string, n: number, brandFile?: string | null): string {
+function reelsPrompt(client: any, episodeName: string, n: number, brandFile?: string | null, shortEpisode = false): string {
   return [
-    `From this project's main podcast composition, create ${n} NEW separate compositions, each a short-form social reel of 30-60 seconds built around one strong self-contained moment.`,
+    `From this project's main podcast composition, create ${n} NEW separate compositions, each a ready-to-post short-form social reel built around one strong self-contained moment.`,
     "Requirements for every reel:",
-    ...REEL_FRAMING,
+    ...reelFraming(client, shortEpisode),
     brandLine(client, brandFile),
     `- Name each new composition exactly like: "Reel 1 — <short title>", "Reel 2 — <short title>", and so on.`,
     "Pick genuinely different moments across the episode; never overlap the same segment twice.",
@@ -195,7 +256,7 @@ function fmtTc(sec: number): string {
 
 // Build the Underlord prompt from clips our own selection layer already chose,
 // so the agent cuts exact ranges instead of guessing what is interesting.
-function timedReelsPrompt(client: any, picks: any[], brandFile?: string | null): string {
+function timedReelsPrompt(client: any, picks: any[], brandFile?: string | null, shortEpisode = false): string {
   const lines = picks.map((p: any, i: number) =>
     `${i + 1}. "Reel ${i + 1} — ${String(p.title ?? "Clip").replace(/"/g, "")}" — from ${fmtTc(p.start_s)} to ${fmtTc(p.end_s)}${p.hook ? ` (opens on: "${String(p.hook).slice(0, 120)}")` : ""}`);
   return [
@@ -203,8 +264,8 @@ function timedReelsPrompt(client: any, picks: any[], brandFile?: string | null):
     "",
     ...lines,
     "",
-    "Every one of these must be a finished, ready-to-post vertical reel:",
-    ...REEL_FRAMING,
+    "Every one of these must be a finished, ready-to-post vertical reel that needs no further editing:",
+    ...reelFraming(client, shortEpisode),
     "- Keep the full conversational exchange inside the given range: the hook AND the response that pays it off.",
     brandLine(client, brandFile),
     "Do not modify the original main composition, and do not create any compositions beyond the ones listed.",
@@ -214,7 +275,7 @@ function timedReelsPrompt(client: any, picks: any[], brandFile?: string | null):
 
 // George's reel-selection spec: emotion + context + conversation dynamics + ICP
 // relevance, scored by K-factor, top N ranked, each standing alone as a reel.
-function reelSelectionPrompt(client: any, episodeName: string, transcript: string, n: number, episodeDuration: number): string {
+function reelSelectionPrompt(client: any, episodeName: string, transcript: string, n: number, episodeDuration: number, avoid: [number, number][] = []): string {
   return `You are a short-form virality strategist. Below is the timecoded transcript of a podcast episode titled "${episodeName}".
 
 ${client?.target_audience ? `ICP / target audience: ${client.target_audience}` : "ICP / target audience: senior professionals in the speaker's industry."}
@@ -230,8 +291,9 @@ How to judge every candidate (this is the whole job):
 - ICP RELEVANCE: it speaks to the audience above and their problems.
 - K-FACTOR (0-100): how likely a viewer is to share, save or comment. Weigh hook strength, emotional charge, specificity (numbers, names, stakes), contrarian value, and how quotable the payoff is. Be honest and discriminating — spread the scores, do not give everything 80+.
 
-Hard rules for each clip:
-- 30 to 60 seconds long. Aim for ~45 seconds.
+${avoid.length ? `Already offered to this client and REJECTED as options \u2014 do not choose these ranges or anything substantially overlapping them, find genuinely different moments: ${avoid.map(([a, b]) => `${a}-${b}s`).join(", ")}\n` : ""}Hard rules for each clip:
+- ${Number(episodeDuration) > 0 && Number(episodeDuration) < 420 ? "20 to 45 seconds long (this is a short episode, so shorter clips are expected)" : "30 to 60 seconds long, aiming for ~45 seconds"}.
+- Give the client a CHOICE: return several distinct options spread across the episode, not one.
 - Must START on the hook line itself — the first sentence has to earn attention with no setup.
 - Must CONTAIN the response/payoff, so the exchange resolves inside the clip.
 - Use timecodes that exist in the transcript; start_s and end_s are SECONDS from the episode start (integers).
@@ -303,25 +365,26 @@ async function generatePosts(client: any, episode: any, transcript: string): Pro
 
 // Score + rank candidate clips, then sanity-check them against George's rules
 // (30-60s, no overlaps, inside the episode) before they reach the editor.
-async function selectReelClips(client: any, episode: any, transcript: string, n: number): Promise<any[]> {
+async function selectReelClips(client: any, episode: any, transcript: string, n: number, avoid: [number, number][] = []): Promise<any[]> {
   const dur = Number(episode.duration_seconds ?? 0);
   const text = trimTranscript(transcript);
   let raw: any[];
   try {
-    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, n, dur), "reel selection");
+    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, n, dur, avoid), "reel selection");
   } catch (e) {
     // A count the episode cannot satisfy makes the model give up; ask for less.
     const fewer = Math.max(1, Math.floor(n / 2));
     if (fewer >= n) throw e;
-    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, fewer, dur), "reel selection");
+    raw = await llmJsonArray(reelSelectionPrompt(client, episode.name, text, fewer, dur, avoid), "reel selection");
   }
   const clean = raw.map((c: any) => {
     let start = Math.max(0, Math.floor(Number(c.start_s ?? 0)));
     let end = Math.ceil(Number(c.end_s ?? 0));
     if (!(end > start)) return null;
-    if (end - start < 20) return null;                 // too short to be a reel
+    const minLen = dur > 0 && dur < 420 ? 15 : 20;     // short episodes allow shorter clips
+    if (end - start < minLen) return null;
     if (end - start > 75) end = start + 60;            // clamp overlong picks
-    if (dur > 0 && end > dur) { end = Math.floor(dur); if (end - start < 20) return null; }
+    if (dur > 0 && end > dur) { end = Math.floor(dur); if (end - start < minLen) return null; }
     const k = Math.max(0, Math.min(100, Math.round(Number(c.k_factor ?? 0))));
     return {
       title: String(c.title ?? "Clip").slice(0, 120),
@@ -499,14 +562,20 @@ async function advanceJob(job: any, dscStatus: any | null) {
 
       // Our own selection layer: score every candidate exchange, keep the best N.
       if (job.kind === "select_reels") {
-        // Ask only for as many clips as the episode can actually yield without
-        // overlaps (~55s of runway each) — otherwise the model is forced to pad.
+        // The client should always have a choice, so aim for several clips: shorter
+        // targets on a short episode rather than collapsing to a single reel.
         const dur = Number(episode.duration_seconds ?? 0);
         const want = Math.min(Math.max(client.reel_count ?? 7, 1), 15);
-        const n = dur > 0 ? Math.max(1, Math.min(want, Math.floor(dur / 55))) : want;
+        const per = dur > 0 && dur < 420 ? 40 : 55;
+        let n = dur > 0 ? Math.max(1, Math.min(want, Math.floor(dur / per))) : want;
+        if (n < 3 && dur >= 150) n = Math.min(want, Math.max(n, Math.floor(dur / 35)));
+        // On a regenerate, steer away from the moments already offered.
+        const { data: prior } = await supabase.from("ps_reels").select("start_s,end_s")
+          .eq("episode_id", episode.id).not("start_s", "is", null);
+        const avoid = (prior ?? []).map((r: any) => [Number(r.start_s), Number(r.end_s)] as [number, number]);
         const transcript = await dscTranscript(
           token, episode.descript_project_id, episode.main_composition_id ?? undefined, true);
-        const picks = await selectReelClips(client, episode, transcript, n);
+        const picks = await selectReelClips(client, episode, transcript, n, avoid);
         // A fresh selection supersedes the previous one for this episode.
         await supabase.from("ps_reels").delete().eq("episode_id", episode.id);
         await supabase.from("ps_reels").insert(picks.map((c: any) => ({
@@ -538,11 +607,24 @@ async function advanceJob(job: any, dscStatus: any | null) {
           const candidate = `Branding/podcast-logo.${ext}`;
           if (Object.keys(project.media_files ?? {}).some((k: string) => k === candidate)) brandFile = candidate;
         }
+        const shortEp = Number(episode.duration_seconds ?? 0) > 0 && Number(episode.duration_seconds) < 420;
         const prompt = picks?.length
-          ? timedReelsPrompt(client, picks, brandFile)
-          : reelsPrompt(client, episode.name, n, brandFile);
+          ? timedReelsPrompt(client, picks, brandFile, shortEp)
+          : reelsPrompt(client, episode.name, n, brandFile, shortEp);
         await startAgentJob(token, j2, prompt, {
           project_id: episode.descript_project_id, model: client.descript_model,
+        });
+        return;
+      }
+
+      if (job.kind === "qa_pass") {
+        const brandFile = client.watermark_url
+          ? `Branding/podcast-logo.${(String(client.watermark_url).split("?")[0].match(/\.(png|jpg|jpeg|webp)$/i)?.[1] ?? "png").toLowerCase()}`
+          : null;
+        await startAgentJob(token, job, qaPrompt(client, brandFile), {
+          project_id: episode.descript_project_id,
+          composition_id: episode.main_composition_id ?? undefined,
+          model: client.descript_model,
         });
         return;
       }
@@ -683,6 +765,18 @@ async function advanceJob(job: any, dscStatus: any | null) {
         return;
       }
 
+      if (job.kind === "qa_pass" && episode) {
+        await supabase.from("ps_episodes").update({
+          qa_report: r.agent_response ?? null, qa_at: new Date().toISOString(),
+        }).eq("id", episode.id);
+        if (r.project_changed && episode.main_composition_id) {
+          await startPublishJob(token, job, episode.descript_project_id, episode.main_composition_id);
+        } else {
+          await updateJob(job.id, { step: "done" });
+        }
+        return;
+      }
+
       if (job.kind === "command" && episode) {
         const commandId = job.payload?.command_id;
         if (commandId) {
@@ -735,9 +829,12 @@ async function advanceJob(job: any, dscStatus: any | null) {
         await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
         // Chain the rest of the pipeline.
         const { data: existing } = await supabase.from("ps_jobs").select("id,kind")
-          .eq("episode_id", episode.id).in("kind", ["select_reels", "make_reels", "generate_posts"])
+          .eq("episode_id", episode.id).in("kind", ["qa_pass", "select_reels", "make_reels", "generate_posts"])
           .not("step", "in", "(failed,cancelled)");
         const kinds = new Set((existing ?? []).map((x: any) => x.kind));
+        // QA first: the episode the client sees gets checked and fixed before we
+        // build anything on top of it.
+        if (client.qa_pass !== false && !kinds.has("qa_pass")) await enqueue(job.client_id, episode.id, "qa_pass");
         if (!kinds.has("generate_posts")) await enqueue(job.client_id, episode.id, "generate_posts");
         if (!kinds.has("select_reels") && !kinds.has("make_reels")) await enqueue(job.client_id, episode.id, "select_reels");
         await logEvent("episode_ready", { episode_id: episode.id, share_url: urls.share_url });
@@ -756,6 +853,16 @@ async function advanceJob(job: any, dscStatus: any | null) {
           await updateJob(job.id, { step: "done" });
           await logEvent("reels_ready", { episode_id: episode.id });
         }
+        return;
+      }
+
+      if (job.kind === "qa_pass" && episode) {
+        await supabase.from("ps_episodes").update({
+          main_share_url: urls.share_url ?? episode.main_share_url,
+          main_download_url: urls.download_url ?? episode.main_download_url,
+          main_download_expires_at: urls.download_expires_at ?? episode.main_download_expires_at,
+        }).eq("id", episode.id);
+        await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
         return;
       }
 
@@ -880,7 +987,7 @@ function episodePublic(e: any) {
     duration_seconds: e.duration_seconds, folder_path: e.folder_path,
     share_url: e.main_share_url, download_url: e.main_download_url,
     download_expires_at: e.main_download_expires_at,
-    project_url: e.project_url, error: e.error,
+    project_url: e.project_url, error: e.error, qa_report: e.qa_report, qa_at: e.qa_at,
     recorded_at: e.descript_created_at, produced_at: e.produced_at,
   };
 }
@@ -1090,7 +1197,8 @@ Deno.serve(async (req) => {
           target_audience: client.target_audience, brand_notes: client.brand_notes,
           reel_count: client.reel_count, auto_produce: client.auto_produce,
           watermark_url: client.watermark_url, watermark_position: client.watermark_position,
-          intro_notes: client.intro_notes,
+          intro_notes: client.intro_notes, music_style: client.music_style,
+          caption_style: client.caption_style, qa_pass: client.qa_pass,
           room_url: client.room_url, connected: !!client.descript_token,
           drive_name: client.descript_drive_name, access_key: authn.is_owner ? client.access_key : null,
           can_edit: !!authn.is_admin,
@@ -1105,6 +1213,9 @@ Deno.serve(async (req) => {
         if ("auto_produce" in body) patch.auto_produce = !!body.auto_produce;
         if ("logo_url" in body) patch.logo_url = String(body.logo_url ?? "").slice(0, 500) || null;
         if ("intro_notes" in body) patch.intro_notes = String(body.intro_notes ?? "").slice(0, 1000) || null;
+        if ("music_style" in body) patch.music_style = ["none", "subtle", "energetic"].includes(body.music_style) ? body.music_style : "subtle";
+        if ("caption_style" in body) patch.caption_style = body.caption_style === "clean" ? "clean" : "trending";
+        if ("qa_pass" in body) patch.qa_pass = !!body.qa_pass;
         if ("watermark_position" in body) patch.watermark_position = body.watermark_position === "top-left" ? "top-left" : "top-right";
         if ("watermark_url" in body) {
           const w = String(body.watermark_url ?? "").trim();
@@ -1316,6 +1427,16 @@ Deno.serve(async (req) => {
         const { data: ep } = await supabase.from("ps_episodes").select("*").eq("id", episode_id).eq("client_id", client.id).maybeSingle();
         if (!ep) return json({ error: "not_found" }, 404);
         const jb = await enqueue(client.id, ep.id, "generate_posts");
+        await advanceJob(jb, null);
+        return json({ ok: true, job_id: jb.id });
+      }
+
+      if (path === "/api/qa" && req.method === "POST") {
+        const { episode_id } = body;
+        const { data: ep } = await supabase.from("ps_episodes").select("*").eq("id", episode_id).eq("client_id", client.id).maybeSingle();
+        if (!ep) return json({ error: "not_found" }, 404);
+        if (ep.status !== "ready") return json({ error: "Produce the episode first." }, 409);
+        const jb = await enqueue(client.id, ep.id, "qa_pass");
         await advanceJob(jb, null);
         return json({ ok: true, job_id: jb.id });
       }
