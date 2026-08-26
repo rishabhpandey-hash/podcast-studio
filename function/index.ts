@@ -144,14 +144,23 @@ async function isAdmin(req: Request, url: URL): Promise<boolean> {
 
 // ---------- prompts ----------
 
-function musicLine(client: any, forReel: boolean): string {
+// Music belongs to reels only: the episode is published bare so nothing competes
+// with the conversation. The level rules are explicit because the first live reel
+// came back with speech and music at parity, 21 dB below the episode's own speech.
+function musicLine(client: any): string {
   const m = client?.music_style ?? "subtle";
   if (m === "none") return "";
   const energy = m === "energetic"
-    ? (forReel ? "an upbeat, driving track that suits a punchy social clip" : "a light, modern track with gentle energy")
+    ? "an upbeat, driving track that suits a punchy social clip"
     : "an understated, tasteful track that sits far behind the voices";
-  return `- Add background music from Descript's royalty-free library: ${energy}. Keep it clearly under the speech at all times (duck it whenever anyone talks) and never let it compete with the dialogue. Start it with the first frame and end it with the last.`;
+  return `- Add background music from Descript's royalty-free library: ${energy}. The music is a quiet bed UNDERNEATH the voices, never a partner to them: set it roughly 18 to 20 dB below the speech so it is barely noticeable while anyone is talking, and duck it further whenever someone speaks. Start it with the first frame and end it with the last.`;
 }
+
+// The finished clip must be as loud as the source episode. Descript's agent has
+// silently returned reels ~20 dB quieter than the episode they came from, which
+// is unusable on social where everything else is normalised to about -14 LUFS.
+const REEL_LOUDNESS =
+  "- LOUDNESS (critical): the voices in this clip must be exactly as loud as they are in the source episode. Do NOT turn the speech down to make room for the music — turn the music down instead. The finished clip should measure about -14 LUFS integrated with peaks near -1 dBFS, the same as the episode. A reel that plays quietly gets scrolled past, and speech that sits at the same level as the music is wrong.";
 
 function captionLine(client: any): string {
   const trending = (client?.caption_style ?? "trending") !== "clean";
@@ -169,8 +178,8 @@ function reelFraming(client: any, shortEpisode: boolean): string[] {
     captionLine(client),
     "- Cut hard into the first word with no fade in, and end cleanly on the last word.",
     "- Remove filler words and dead air inside the clip so it never drags, and apply Studio Sound.",
-    "- Add a subtle push-in on the strongest line so the frame is never static for the whole clip.",
-    musicLine(client, true),
+    musicLine(client),
+    REEL_LOUDNESS,
     `- Length: ${shortEpisode ? "20 to 45 seconds" : "30 to 60 seconds"} — whatever makes the moment land without padding.`,
     "- No intro, no outro, no title cards, no stock footage.",
   ].filter(Boolean);
@@ -181,18 +190,20 @@ function reelFraming(client: any, shortEpisode: boolean): string[] {
 // work reaching a client.
 function qaPrompt(client: any, brandFile?: string | null): string {
   const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
-  const music = (client?.music_style ?? "subtle") !== "none";
   return [
     "Quality-check the main (longest) video composition of this project against the checklist below. For every item: if it is already satisfied, leave it alone; if it is NOT satisfied, fix it now.",
     "",
-    "1. No filler words, stumbles, retakes or dead air remain, and the pacing feels crisp.",
-    "2. If multiple cameras or speaker tracks exist, the visible camera follows the active speaker across the whole timeline, with no static shot held longer than about 8 seconds.",
-    "3. Framing varies between scenes and no stretch is completely frozen; faces are well framed with the eyeline in the upper third.",
-    "4. The footage fills the entire 16:9 frame: no black bars, no letterboxing, no empty space.",
-    "5. Studio Sound is applied to every clip and all speakers are level-matched.",
-    music ? "6. Background music is present and sits clearly under the speech. (Volume fades need manual keyframes and are out of scope — do not report them as a failure.)" : "6. There is no unintended background music or noise.",
-    "7. Captions are burned in, bold, readable on a phone, correctly timed, two lines maximum, and never cover a face or touch the bottom edge.",
-    brandFile ? `8. The branding image "${brandFile}" is visible in the ${pos} corner for the whole episode and covers nothing important.` : "8. No stray overlays or leftover graphics remain.",
+    "This episode must read as a calm, professionally shot podcast conversation — never as a trailer or a highlight reel. Where an item below asks you to REMOVE cuts or movement, removing them is the fix; do not add energy back.",
+    "",
+    "1. No filler words, stumbles, retakes or dead air remain, and the conversation still sounds natural rather than rushed or clipped.",
+    "2. The visible camera is on whoever is speaking, and every cut lands on a speaker change. No cut interrupts a sentence.",
+    "3. No shot is shorter than about 5 seconds, and the episode does not flick between angles for variety. A long steady shot of the person speaking is CORRECT — if you find rapid or decorative cutting, remove those cuts and let the shot run.",
+    "4. Nothing moves inside a shot: no zoom, no push-in, no Ken Burns drift, no pan, no scaling. If you find any such movement, remove it so the framing is static.",
+    "5. The footage fills the entire 16:9 frame: no black bars, no letterboxing, and no multi-camera layout left in place where a feed is inactive.",
+    "6. Studio Sound is applied to every clip and all speakers are level-matched.",
+    "7. There is NO background music or soundtrack track on the episode. If one exists, remove it.",
+    "8. There are NO captions, subtitles or burned-in text of any kind. If a caption track exists, remove it.",
+    brandFile ? `9. The branding image "${brandFile}" is visible in the ${pos} corner for the whole episode and covers nothing important.` : "9. No stray overlays or leftover graphics remain.",
     "",
     "Then reply with one short line per item saying PASS or FIXED (naming what you changed). If something genuinely cannot be done with this footage, say NOT POSSIBLE and why.",
   ].filter(Boolean).join("\n");
@@ -201,31 +212,34 @@ function qaPrompt(client: any, brandFile?: string | null): string {
 function producePrompt(client: any, brandFile?: string | null): string {
   const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
   return [
-    "You are producing a recorded podcast episode into a finished, publish-ready video. The result must look like a professionally edited show, not a raw recording. Work on the main (longest) video composition of this project.",
+    "You are producing a recorded podcast episode into a finished, publish-ready video. It must look like a calm, professionally shot podcast conversation. It must NOT look like a trailer, a promo or a highlight reel. Work on the main (longest) video composition of this project.",
     "",
     "TIGHTEN THE EDIT:",
     "- Remove every filler word (um, uh, like, you know), false start, stumble and repeated sentence.",
     "- Remove retakes, keeping the best take of anything said twice.",
-    "- Shorten the gaps between words and sentences so the pacing feels crisp, and cut all dead air and long pauses.",
+    "- Close the obviously long silences, but keep the natural rhythm of the conversation. Do not make it feel rushed or clipped.",
     "- Cut throat-clearing, background chatter and any off-topic housekeeping at the start or the end.",
     "",
-    "MAKE IT VISUALLY ALIVE (this is what separates a finished show from a static talking head):",
-    "- If there is more than one camera or speaker track, set up automatic multicam: the visible camera must follow whoever is speaking, with scenes across the entire timeline. Never hold one static shot for more than about 8 seconds when another angle exists; cut on speaker changes and on reactions.",
-    "- Vary the framing between scenes: alternate slightly wider and tighter crops (roughly 1.05x to 1.35x) with the focal point a little above centre so faces stay well framed and the eyeline sits in the upper third.",
-    "- On any long single-speaker stretch, add a slow, subtle push-in or Ken Burns style drift so the frame is never frozen.",
-    "- Use clean, quick transitions between scenes: simple cuts, or a short crossfade where it genuinely helps. Nothing flashy.",
+    "CAMERA WORK — CALM AND CONVERSATIONAL (this is the most important part):",
+    "- Show whoever is currently speaking, and STAY on them for as long as they keep speaking. A cut happens because the speaker changed — never to add energy or variety.",
+    "- Never cut in the middle of someone's sentence or thought.",
+    "- Hold every shot for at least about 5 seconds. Do not cut rapidly and do not alternate between angles to keep things moving. A long, steady shot of the person who is talking is CORRECT and is what a podcast is supposed to look like.",
+    "- Use a two-up or group layout for genuine back-and-forth or shared laughter, then settle back onto the speaker.",
+    "- NO zooming, NO push-ins, NO Ken Burns drift, NO panning, NO scaling changes inside a shot. The framing must be completely still while a shot is on screen.",
+    "- Use one consistent, well-composed crop per camera for the whole episode. Do not vary the crop from scene to scene.",
+    "- Simple hard cuts only. No transitions, no effects, no motion graphics, no title cards.",
     "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive — that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
     "",
     "MAKE IT SOUND PROFESSIONAL:",
     "- Apply Studio Sound to every clip so voices are clean, warm and level-matched across speakers.",
     "- Balance the speakers against each other so nobody is noticeably louder or quieter.",
-    musicLine(client, false),
+    "- Do NOT add background music to the episode. The episode carries the conversation and nothing else. If a music or soundtrack track already exists in the composition, remove it.",
     "",
     "FINISHING:",
-    captionLine(client),
+    "- Do NOT add captions or subtitles, and do not leave any existing caption track in place. This episode is published to YouTube, which generates its own subtitles. There must be no burned-in text of any kind.",
     "- Apply Eye Contact correction to the speaker tracks if the footage supports it, so speakers appear to look at the camera.",
     brandFile
-      ? `- The image "${brandFile}" is in this project. Place it as a small persistent branding overlay in the ${pos} corner, about 8-10% of the frame width, inside a comfortable safe margin, visible for the entire episode, never covering a face or the captions.`
+      ? `- The image "${brandFile}" is in this project. Place it as a small, completely static branding overlay in the ${pos} corner, about 8-10% of the frame width, inside a comfortable safe margin, visible for the entire episode and never covering a face.`
       : "",
     "",
     "Do not reorder the conversation, do not remove substantive content, and do not add stock footage or b-roll. Keep the composition's existing name.",
