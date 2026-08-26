@@ -147,7 +147,7 @@ function musicLine(client: any, forReel: boolean): string {
   const energy = m === "energetic"
     ? (forReel ? "an upbeat, driving track that suits a punchy social clip" : "a light, modern track with gentle energy")
     : "an understated, tasteful track that sits far behind the voices";
-  return `- Add background music from Descript's royalty-free library: ${energy}. Keep it clearly under the speech at all times (duck it whenever anyone talks), fade it in at the start and out at the end, and never let it compete with the dialogue.`;
+  return `- Add background music from Descript's royalty-free library: ${energy}. Keep it clearly under the speech at all times (duck it whenever anyone talks) and never let it compete with the dialogue. Start it with the first frame and end it with the last.`;
 }
 
 function captionLine(client: any): string {
@@ -187,7 +187,7 @@ function qaPrompt(client: any, brandFile?: string | null): string {
     "3. Framing varies between scenes and no stretch is completely frozen; faces are well framed with the eyeline in the upper third.",
     "4. The footage fills the entire 16:9 frame: no black bars, no letterboxing, no empty space.",
     "5. Studio Sound is applied to every clip and all speakers are level-matched.",
-    music ? "6. Background music is present, sits clearly under the speech, and fades in and out." : "6. There is no unintended background music or noise.",
+    music ? "6. Background music is present and sits clearly under the speech. (Volume fades need manual keyframes and are out of scope \u2014 do not report them as a failure.)" : "6. There is no unintended background music or noise.",
     "7. Captions are burned in, bold, readable on a phone, correctly timed, two lines maximum, and never cover a face or touch the bottom edge.",
     brandFile ? `8. The branding image "${brandFile}" is visible in the ${pos} corner for the whole episode and covers nothing important.` : "8. No stray overlays or leftover graphics remain.",
     "",
@@ -210,7 +210,7 @@ function producePrompt(client: any, brandFile?: string | null): string {
     "- Vary the framing between scenes: alternate slightly wider and tighter crops (roughly 1.05x to 1.35x) with the focal point a little above centre so faces stay well framed and the eyeline sits in the upper third.",
     "- On any long single-speaker stretch, add a slow, subtle push-in or Ken Burns style drift so the frame is never frozen.",
     "- Use clean, quick transitions between scenes: simple cuts, or a short crossfade where it genuinely helps. Nothing flashy.",
-    "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space.",
+    "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive \u2014 that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
     "",
     "MAKE IT SOUND PROFESSIONAL:",
     "- Apply Studio Sound to every clip so voices are clean, warm and level-matched across speakers.",

@@ -78,6 +78,15 @@ After the episode is published and **before** reels or posts are built on it, a 
 
 Cost note: this roughly doubles the agent credits per episode (one production pass + one QA pass). That is the trade for a first draft the client accepts.
 
+## What the first live QA pass actually caught (26 Aug)
+
+Proof the pass is not decoration — on a freshly produced 3-camera episode it found and fixed three defects the production pass had left:
+1. **15.2s of dead post-recording chat** still on the end of the composition.
+2. **A 44.7-second completely static opening shot** — exactly the "dull" problem. It split the intro into five scenes at 8s intervals with alternating layouts.
+3. **A black bar on the right of the final scene**, caused by a 3-camera layout left in place where only 2 feeds were live. Lesson now baked into the production brief: never leave a multi-camera layout where a feed is inactive.
+
+It also surfaced one **hard API limit**: music **fade in/out cannot be applied by the agent** — volume keyframe automation needs manual timeline editing. The music itself, its level and speech ducking all work; only the fades don't. We stopped asking for fades so the report no longer carries a permanent "NOT POSSIBLE" line.
+
 ## Reels: always a choice
 
 Clip length adapts to the episode (20–45s on short recordings, 30–60s on real ones), the count targets **at least 3 options** wherever the runtime allows, and regenerating passes the previously offered ranges as a do-not-reuse list so a second pass finds genuinely different moments. Recordings under 25 seconds are skipped with a plain explanation rather than a failure.
