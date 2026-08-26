@@ -99,24 +99,38 @@ function humanDscError(e: unknown): string {
 // ---------- auth ----------
 // Two ways in: a per-client access key (external clients) or a Supabase Auth
 // magic-link session (team members whitelisted in ps_users).
-async function resolveClient(req: Request, url: URL): Promise<{ client: any; email?: string; is_admin?: boolean } | null> {
+type Authn = { client: any; email?: string; is_admin?: boolean; is_owner?: boolean };
+
+async function resolveClient(req: Request, url: URL): Promise<Authn | null> {
   const key = url.searchParams.get("key") || req.headers.get("x-access-key") || "";
   if (key) {
     const { data } = await supabase.from("ps_clients").select("*").eq("access_key", key).eq("active", true).maybeSingle();
     if (data) return { client: data };
   }
   const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (jwt) {
-    const { data: u } = await supabase.auth.getUser(jwt);
-    const email = u?.user?.email?.toLowerCase();
-    if (email) {
-      const { data: memb } = await supabase.from("ps_users").select("*, ps_clients(*)").eq("email", email).maybeSingle();
-      if (memb?.ps_clients && memb.ps_clients.active) {
-        return { client: memb.ps_clients, email, is_admin: !!memb.is_admin };
-      }
-    }
+  if (!jwt) return null;
+  const { data: u } = await supabase.auth.getUser(jwt);
+  const email = u?.user?.email?.toLowerCase();
+  if (!email) return null;
+  const { data: memb } = await supabase.from("ps_users").select("*").eq("email", email).maybeSingle();
+  if (!memb) return null;
+
+  // Owners (our team) may act on any client; everyone else is locked to theirs.
+  const wanted = url.searchParams.get("client_id");
+  if (memb.is_owner) {
+    let q = supabase.from("ps_clients").select("*").eq("active", true);
+    const { data: c } = wanted
+      ? await q.eq("id", wanted).maybeSingle()
+      : await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!c) return null;
+    return { client: c, email, is_admin: true, is_owner: true };
   }
-  return null;
+  if (!memb.client_id) return null;
+  if (wanted && wanted !== memb.client_id) return null; // never cross client lines
+  const { data: own } = await supabase.from("ps_clients").select("*")
+    .eq("id", memb.client_id).eq("active", true).maybeSingle();
+  if (!own) return null;
+  return { client: own, email, is_admin: !!memb.is_admin, is_owner: false };
 }
 async function isAdmin(req: Request, url: URL): Promise<boolean> {
   const secret = req.headers.get("x-admin-secret") || url.searchParams.get("admin_secret") || "";
@@ -126,32 +140,51 @@ async function isAdmin(req: Request, url: URL): Promise<boolean> {
 }
 
 // ---------- prompts ----------
-function producePrompt(client: any): string {
+function producePrompt(client: any, brandFile?: string | null): string {
+  const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
   return [
-    "You are producing a podcast episode recording so it is ready to publish. In the main (longest) video composition of this project:",
+    "You are producing a podcast episode recording so it is ready to publish. Work on the main (longest) video composition of this project:",
     "1. Remove all filler words (um, uh, like, you know) and awkward false starts.",
     "2. Cut long silences and dead air, keeping the conversation natural.",
-    "3. Apply Studio Sound to all clips so the audio is clean and consistent.",
-    "4. Add tasteful captions.",
-    "5. Do not change the order of the conversation, do not remove substantive content, and do not add music.",
+    "3. Apply Studio Sound to every clip so the audio is clean and consistent.",
+    "4. Add tasteful, readable captions.",
+    "5. If the recording has more than one camera or speaker track, set up automatic multicam: switch the visible camera to whoever is actively speaking, creating scenes across the whole timeline. When two people are talking over each other or reacting, a shared/side-by-side view is fine.",
+    "6. Add subtle dynamic camera work: vary the zoom slightly between scenes (roughly 1.1x to 1.35x) with the focal point a little above centre so faces stay well framed. Keep it tasteful, never jumpy.",
+    brandFile
+      ? `7. The image "${brandFile}" has been added to this project. Place it as a small persistent branding overlay in the ${pos} corner, about 8-10% of the frame width, with a comfortable margin from the edges, visible for the entire episode. Do not let it cover faces or captions.`
+      : "",
+    "Do not change the order of the conversation, do not remove substantive content, and do not add music.",
     "Keep the composition's existing name.",
-  ].join("\n");
+    client?.intro_notes ? `Extra production notes from the client: ${client.intro_notes}` : "",
+  ].filter(Boolean).join("\n");
 }
 
-function reelsPrompt(client: any, episodeName: string, n: number): string {
+const REEL_FRAMING = [
+  "- Canvas: vertical 1080x1920 (9:16).",
+  "- CRITICAL FRAMING: the footage must FILL the entire vertical frame, edge to edge. Scale the widescreen source UP and crop the left and right sides. There must be NO black bars, NO letterboxing at the top or bottom, and no empty space anywhere in the frame. A small 16:9 video floating in the middle of a black portrait canvas is wrong and unusable.",
+  "- Frame the person, not the room: the speaker's head and shoulders should fill most of the width, face in the upper-middle of the frame with the eyes roughly a third of the way down, and comfortable headroom. Crop the sides, never crop the face.",
+  "- When several people speak, cut to whoever is speaking and re-crop so that person is centred and filling the frame the same way.",
+  "- Captions: burned in, large, bold, centred, sitting in the lower third but clear of the very bottom edge, 3 to 6 words per line, high contrast with a subtle shadow or plate so they stay readable on any background. Captions must never cover the speaker's face.",
+  "- Remove filler words inside the clip and apply Studio Sound.",
+  "- Start immediately on the first words of the range: no intro, no outro, no title cards, no fades.",
+];
+
+function brandLine(client: any, brandFile?: string | null): string {
+  if (!brandFile) return "";
+  const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
+  return `- Place the image "${brandFile}" as a small logo in the ${pos} corner at about 10% of the frame width, inside a comfortable safe margin, visible for the whole clip and never covering a face or the captions.`;
+}
+
+function reelsPrompt(client: any, episodeName: string, n: number, brandFile?: string | null): string {
   return [
-    `From this project's main podcast composition, create ${n} NEW separate compositions, each a short-form social reel.`,
+    `From this project's main podcast composition, create ${n} NEW separate compositions, each a short-form social reel of 30-60 seconds built around one strong self-contained moment.`,
     "Requirements for every reel:",
-    "- Vertical portrait format, 1080x1920.",
-    "- 30 to 60 seconds long, a single self-contained highlight: a strong insight, story, or bold statement from the episode.",
-    "- Start mid-action with a hook moment; no intros or outros.",
-    "- Remove filler words within the reel and apply Studio Sound.",
-    "- Add bold, readable captions suitable for sound-off viewing.",
-    "- When several people speak, keep the speaker who is talking framed and centered.",
+    ...REEL_FRAMING,
+    brandLine(client, brandFile),
     `- Name each new composition exactly like: "Reel 1 — <short title>", "Reel 2 — <short title>", and so on.`,
-    "Pick genuinely different moments across the episode; do not overlap the same segment twice.",
+    "Pick genuinely different moments across the episode; never overlap the same segment twice.",
     "Do not modify the original main composition.",
-    client?.target_audience ? `The audience for these reels: ${client.target_audience}. Choose moments that will resonate with them.` : "",
+    client?.target_audience ? `The audience for these reels: ${client.target_audience}.` : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -162,7 +195,7 @@ function fmtTc(sec: number): string {
 
 // Build the Underlord prompt from clips our own selection layer already chose,
 // so the agent cuts exact ranges instead of guessing what is interesting.
-function timedReelsPrompt(client: any, picks: any[]): string {
+function timedReelsPrompt(client: any, picks: any[], brandFile?: string | null): string {
   const lines = picks.map((p: any, i: number) =>
     `${i + 1}. "Reel ${i + 1} — ${String(p.title ?? "Clip").replace(/"/g, "")}" — from ${fmtTc(p.start_s)} to ${fmtTc(p.end_s)}${p.hook ? ` (opens on: "${String(p.hook).slice(0, 120)}")` : ""}`);
   return [
@@ -170,13 +203,10 @@ function timedReelsPrompt(client: any, picks: any[]): string {
     "",
     ...lines,
     "",
-    "For every one of these compositions:",
-    "- Vertical portrait format, 1080x1920.",
+    "Every one of these must be a finished, ready-to-post vertical reel:",
+    ...REEL_FRAMING,
     "- Keep the full conversational exchange inside the given range: the hook AND the response that pays it off.",
-    "- Turn on subtitles/captions — bold and readable for sound-off viewing.",
-    "- Remove filler words inside the clip and apply Studio Sound.",
-    "- When several people speak, keep whoever is currently speaking framed and centered.",
-    "- Start immediately on the first words of the range; no intro, no outro, no titles.",
+    brandLine(client, brandFile),
     "Do not modify the original main composition, and do not create any compositions beyond the ones listed.",
     client?.target_audience ? `Audience context: ${client.target_audience}.` : "",
   ].filter(Boolean).join("\n");
@@ -432,7 +462,36 @@ async function advanceJob(job: any, dscStatus: any | null) {
 
       if (job.kind === "produce_main") {
         await supabase.from("ps_episodes").update({ status: "producing", error: null }).eq("id", episode.id);
-        await startAgentJob(token, job, producePrompt(client), {
+        // Branding overlay: the logo has to exist inside the project before the
+        // editor can place it, so import it first and continue on its callback.
+        const brand = client.watermark_url ? String(client.watermark_url) : null;
+        if (brand && !job.payload?.brand_ready) {
+          const ext = (brand.split("?")[0].match(/\.(png|jpg|jpeg|webp)$/i)?.[1] ?? "png").toLowerCase();
+          const brandFile = `Branding/podcast-logo.${ext}`;
+          const secret = (await cfg("webhook_secret"))!;
+          try {
+            const imp = await dsc(token, "POST", "/jobs/import/project_media", {
+              project_id: episode.descript_project_id,
+              add_media: { [brandFile]: { url: brand } },
+              callback_url: callbackUrlFor(job.id, secret),
+            });
+            await updateJob(job.id, {
+              step: "brand_import", descript_job_id: imp.job_id,
+              payload: { ...job.payload, brand_file: brandFile },
+            });
+            return;
+          } catch (e) {
+            // Already imported (name clash) or unreachable image: carry on and
+            // still reference the file if it is a plain conflict.
+            const conflict = e instanceof DscError && e.status === 400;
+            await logEvent("brand_import_skipped", { episode_id: episode.id, conflict, error: humanDscError(e) });
+            await startAgentJob(token, job, producePrompt(client, conflict ? brandFile : null), {
+              project_id: episode.descript_project_id, model: client.descript_model,
+            });
+            return;
+          }
+        }
+        await startAgentJob(token, job, producePrompt(client, job.payload?.brand_file ?? null), {
           project_id: episode.descript_project_id, model: client.descript_model,
         });
         return;
@@ -471,7 +530,17 @@ async function advanceJob(job: any, dscStatus: any | null) {
         await updateJob(job.id, { payload: j2.payload });
         // Cut the exact ranges our selection layer chose; only fall back to a
         // generic "find something good" prompt if no selection exists.
-        const prompt = picks?.length ? timedReelsPrompt(client, picks) : reelsPrompt(client, episode.name, n);
+        // The branding image was imported into this project during production,
+        // so reels can carry the same logo without importing it again.
+        let brandFile: string | null = null;
+        if (client.watermark_url) {
+          const ext = (String(client.watermark_url).split("?")[0].match(/\.(png|jpg|jpeg|webp)$/i)?.[1] ?? "png").toLowerCase();
+          const candidate = `Branding/podcast-logo.${ext}`;
+          if (Object.keys(project.media_files ?? {}).some((k: string) => k === candidate)) brandFile = candidate;
+        }
+        const prompt = picks?.length
+          ? timedReelsPrompt(client, picks, brandFile)
+          : reelsPrompt(client, episode.name, n, brandFile);
         await startAgentJob(token, j2, prompt, {
           project_id: episode.descript_project_id, model: client.descript_model,
         });
@@ -521,6 +590,17 @@ async function advanceJob(job: any, dscStatus: any | null) {
     if (state === "cancelled") { await failJob(job, new Error("The editing job was cancelled in Descript.")); return; }
     const r = dscStatus.result ?? {};
     const failed = r.status === "error" || r.status === "failed";
+
+    // ----- branding image landed: now run the production edit -----
+    if (job.step === "brand_import") {
+      if (!(await claim(job.id, "brand_import", "starting"))) return;
+      const okBrand = !failed && (Object.values(r.media_status ?? {})[0] as any)?.status !== "failed";
+      if (!okBrand) await logEvent("brand_import_failed", { episode_id: job.episode_id, result: r });
+      await startAgentJob(token, job, producePrompt(client, okBrand ? (job.payload?.brand_file ?? null) : null), {
+        project_id: episode!.descript_project_id, model: client.descript_model,
+      });
+      return;
+    }
 
     // ----- import job finished (dashboard upload) -----
     if (job.step === "waiting_import") {
@@ -737,7 +817,7 @@ async function discoverClient(client: any): Promise<{ found: number; added: numb
     if (existing) {
       await supabase.from("ps_episodes").update({
         name: p.name, folder_path: p.folder_path ?? null, descript_updated_at: p.updated_at ?? null,
-      }).eq("id", existing.id);
+      }).eq("id", existing.id); // display_name is ours and is never overwritten
       continue;
     }
     const { data: ep } = await supabase.from("ps_episodes").insert({
@@ -764,7 +844,7 @@ async function cronTick(): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   await recoverStuckClaims();
   const { data: jobs } = await supabase.from("ps_jobs").select("*")
-    .in("step", ["queued", "agent_running", "publishing", "waiting_import"])
+    .in("step", ["queued", "agent_running", "publishing", "waiting_import", "brand_import"])
     .order("created_at", { ascending: true }).limit(20);
   out.active_jobs = jobs?.length ?? 0;
   for (const job of jobs ?? []) {
@@ -786,9 +866,17 @@ async function cronTick(): Promise<Record<string, unknown>> {
 }
 
 // ---------- API payload builders ----------
+function embedOf(share: string | null): string | null {
+  // share.descript.com/view/<slug> is frame-blocked; /embed/<slug> is not.
+  if (!share) return null;
+  const m = String(share).match(/^https:\/\/share\.descript\.com\/view\/([A-Za-z0-9_-]+)/);
+  return m ? `https://share.descript.com/embed/${m[1]}` : null;
+}
+
 function episodePublic(e: any) {
   return {
-    id: e.id, name: e.name, status: e.status, posts_status: e.posts_status,
+    id: e.id, name: e.display_name || e.name, original_name: e.name, embed_url: embedOf(e.main_share_url),
+    has_transcript: !!e.transcript_md, status: e.status, posts_status: e.posts_status,
     duration_seconds: e.duration_seconds, folder_path: e.folder_path,
     share_url: e.main_share_url, download_url: e.main_download_url,
     download_expires_at: e.main_download_expires_at,
@@ -803,8 +891,8 @@ async function apiOverview(client: any) {
   const ids = (episodes ?? []).map((e: any) => e.id);
   let reelCounts: Record<string, number> = {}, postCounts: Record<string, number> = {};
   if (ids.length) {
-    const { data: reels } = await supabase.from("ps_reels").select("episode_id,status").in("episode_id", ids);
-    for (const rl of reels ?? []) if (rl.status === "ready") reelCounts[rl.episode_id] = (reelCounts[rl.episode_id] ?? 0) + 1;
+    const { data: reels } = await supabase.from("ps_reels").select("episode_id,status,hidden").in("episode_id", ids);
+    for (const rl of reels ?? []) if (rl.status === "ready" && !rl.hidden) reelCounts[rl.episode_id] = (reelCounts[rl.episode_id] ?? 0) + 1;
     const { data: posts } = await supabase.from("ps_posts").select("episode_id").in("episode_id", ids);
     for (const p of posts ?? []) postCounts[p.episode_id] = (postCounts[p.episode_id] ?? 0) + 1;
   }
@@ -825,12 +913,13 @@ async function apiEpisode(client: any, id: string) {
   ]);
   return {
     episode: episodePublic(e),
-    reels: (reels ?? []).map((r: any) => ({
+    reels: (reels ?? []).filter((r: any) => !r.hidden).map((r: any) => ({
       id: r.id, title: r.title, status: r.status, share_url: r.share_url, download_url: r.download_url,
+      embed_url: embedOf(r.share_url),
       composition_id: r.composition_id, rank: r.rank, k_factor: r.k_factor, hook: r.hook, why: r.why,
       start_s: r.start_s, end_s: r.end_s, speakers: r.speakers, excerpt: r.excerpt,
     })),
-    posts: (posts ?? []).map((p: any) => ({ id: p.id, hook: p.hook, body: p.body, first_comment: p.first_comment, status: p.status })),
+    posts: (posts ?? []).map((p: any) => ({ id: p.id, hook: p.hook, body: p.body, first_comment: p.first_comment, status: p.status, edited_at: p.edited_at })),
     commands: (commands ?? []).map((c: any) => ({ id: c.id, text: c.text, status: c.status, agent_response: c.agent_response, target: c.target, created_at: c.created_at })),
     jobs: jobs ?? [],
   };
@@ -947,17 +1036,148 @@ Deno.serve(async (req) => {
       const client = authn.client;
 
       if (path === "/api/whoami" && req.method === "GET") {
-        return json({ client: client.name, email: authn.email ?? null, is_admin: !!authn.is_admin });
+        let clients: any[] = [];
+        if (authn.is_owner) {
+          const { data } = await supabase.from("ps_clients").select("id,name,logo_url")
+            .eq("active", true).order("name");
+          clients = data ?? [];
+        }
+        return json({
+          client: client.name, client_id: client.id, email: authn.email ?? null,
+          is_admin: !!authn.is_admin, is_owner: !!authn.is_owner, clients,
+        });
+      }
+
+      // ----- clients: owners onboard and configure workspaces from the dashboard -----
+      if (path === "/api/clients" && req.method === "POST") {
+        if (!authn.is_owner) return json({ error: "Only the studio team can add clients." }, 403);
+        const name = String(body?.name ?? "").trim();
+        if (!name) return json({ error: "Give the client a name." }, 400);
+        const tok = body?.descript_token ? String(body.descript_token).trim() : null;
+        let drive: any = null;
+        if (tok) {
+          try { drive = await dsc(tok, "GET", "/status"); }
+          catch (e) { return json({ error: `That Descript token was rejected: ${humanDscError(e)}` }, 400); }
+        }
+        const access_key = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "client"}-${crypto.randomUUID().slice(0, 8)}`;
+        const { data: created, error } = await supabase.from("ps_clients").insert({
+          name, access_key, descript_token: tok,
+          descript_drive_id: drive?.drive_id ?? null, descript_drive_name: drive?.drive_name ?? null,
+          logo_url: body?.logo_url ? String(body.logo_url).slice(0, 500) : null,
+          target_audience: body?.target_audience ? String(body.target_audience).slice(0, 2000) : null,
+          brand_notes: body?.brand_notes ? String(body.brand_notes).slice(0, 2000) : null,
+          reel_count: Math.min(Math.max(Number(body?.reel_count ?? 7), 1), 15),
+          auto_produce: !!body?.auto_produce,
+          watermark_url: body?.watermark_url ? String(body.watermark_url).slice(0, 500) : null,
+        }).select().single();
+        if (error) return json({ error: error.message }, 400);
+        // The client's own people see ONLY this workspace.
+        const invites = String(body?.invite_emails ?? "").split(/[,\s]+/)
+          .map((e: string) => e.trim().toLowerCase()).filter((e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+        for (const em of invites) {
+          const { data: taken } = await supabase.from("ps_users").select("email").eq("email", em).maybeSingle();
+          if (!taken) await supabase.from("ps_users").insert({ email: em, client_id: created.id, is_admin: !!body?.invite_as_admin });
+        }
+        if (tok) { try { await discoverClient(created); } catch { /* best effort */ } }
+        await logEvent("client_created", { by: authn.email, client: name, invited: invites.length });
+        return json({ ok: true, client_id: created.id, access_key: created.access_key, invited: invites });
+      }
+
+      // ----- settings: content brief + connection, editable in-app -----
+      if (path === "/api/settings" && req.method === "GET") {
+        return json({
+          name: client.name, logo_url: client.logo_url,
+          target_audience: client.target_audience, brand_notes: client.brand_notes,
+          reel_count: client.reel_count, auto_produce: client.auto_produce,
+          watermark_url: client.watermark_url, watermark_position: client.watermark_position,
+          intro_notes: client.intro_notes,
+          room_url: client.room_url, connected: !!client.descript_token,
+          drive_name: client.descript_drive_name, access_key: authn.is_owner ? client.access_key : null,
+          can_edit: !!authn.is_admin,
+        });
+      }
+      if (path === "/api/settings" && req.method === "POST") {
+        if (!authn.is_admin) return json({ error: "Only admins can change settings." }, 403);
+        const patch: Record<string, unknown> = {};
+        if ("target_audience" in body) patch.target_audience = String(body.target_audience ?? "").slice(0, 2000) || null;
+        if ("brand_notes" in body) patch.brand_notes = String(body.brand_notes ?? "").slice(0, 2000) || null;
+        if ("reel_count" in body) patch.reel_count = Math.min(Math.max(Number(body.reel_count) || 7, 1), 15);
+        if ("auto_produce" in body) patch.auto_produce = !!body.auto_produce;
+        if ("logo_url" in body) patch.logo_url = String(body.logo_url ?? "").slice(0, 500) || null;
+        if ("intro_notes" in body) patch.intro_notes = String(body.intro_notes ?? "").slice(0, 1000) || null;
+        if ("watermark_position" in body) patch.watermark_position = body.watermark_position === "top-left" ? "top-left" : "top-right";
+        if ("watermark_url" in body) {
+          const w = String(body.watermark_url ?? "").trim();
+          if (!w) patch.watermark_url = null;
+          else if (!/^https:\/\/\S+\.(png|jpg|jpeg|webp)(\?|$)/i.test(w)) {
+            return json({ error: "The branding logo must be a public https link ending in .png, .jpg or .webp" }, 400);
+          } else patch.watermark_url = w.slice(0, 500);
+        }
+        if ("name" in body && authn.is_owner) patch.name = String(body.name ?? "").slice(0, 120) || client.name;
+        if (body?.descript_token) {
+          try {
+            const drive = await dsc(String(body.descript_token), "GET", "/status");
+            patch.descript_token = String(body.descript_token);
+            patch.descript_drive_id = drive?.drive_id ?? null;
+            patch.descript_drive_name = drive?.drive_name ?? null;
+          } catch (e) { return json({ error: `That Descript token was rejected: ${humanDscError(e)}` }, 400); }
+        }
+        const { error } = await supabase.from("ps_clients").update(patch).eq("id", client.id);
+        if (error) return json({ error: error.message }, 400);
+        return json({ ok: true });
+      }
+
+      // ----- read the transcript without opening the editor -----
+      if (path === "/api/transcript" && req.method === "GET") {
+        const { data: e } = await supabase.from("ps_episodes").select("transcript_md,name,display_name")
+          .eq("id", url.searchParams.get("id") ?? "").eq("client_id", client.id).maybeSingle();
+        if (!e) return json({ error: "not_found" }, 404);
+        return json({ name: e.display_name || e.name, transcript: e.transcript_md ?? null });
+      }
+
+      if (path === "/api/episode/rename" && req.method === "POST") {
+        const name = String(body?.name ?? "").trim().slice(0, 200);
+        if (!name) return json({ error: "Give it a title." }, 400);
+        const { error } = await supabase.from("ps_episodes").update({ display_name: name })
+          .eq("id", body?.episode_id ?? "").eq("client_id", client.id);
+        if (error) return json({ error: error.message }, 400);
+        return json({ ok: true });
+      }
+
+      if (path === "/api/reel/hide" && req.method === "POST") {
+        const { data: r } = await supabase.from("ps_reels").select("id,episode_id").eq("id", body?.reel_id ?? "").maybeSingle();
+        if (!r) return json({ error: "not_found" }, 404);
+        const { data: ep } = await supabase.from("ps_episodes").select("id").eq("id", r.episode_id).eq("client_id", client.id).maybeSingle();
+        if (!ep) return json({ error: "not_found" }, 404);
+        await supabase.from("ps_reels").update({ hidden: !!body?.hidden }).eq("id", r.id);
+        return json({ ok: true });
+      }
+
+      if (path === "/api/post/save" && req.method === "POST") {
+        const { data: pst } = await supabase.from("ps_posts").select("id,episode_id").eq("id", body?.post_id ?? "").maybeSingle();
+        if (!pst) return json({ error: "not_found" }, 404);
+        const { data: ep } = await supabase.from("ps_episodes").select("id").eq("id", pst.episode_id).eq("client_id", client.id).maybeSingle();
+        if (!ep) return json({ error: "not_found" }, 404);
+        const patch: Record<string, unknown> = { edited_at: new Date().toISOString() };
+        if ("body" in body) patch.body = String(body.body ?? "").slice(0, 8000);
+        if ("first_comment" in body) patch.first_comment = String(body.first_comment ?? "").slice(0, 2000) || null;
+        if ("status" in body) patch.status = body.status === "approved" ? "approved" : "draft";
+        await supabase.from("ps_posts").update(patch).eq("id", pst.id);
+        return json({ ok: true });
       }
 
       // ----- team management (email-signed-in admins only) -----
       if (path.startsWith("/api/team")) {
         if (!authn.email || !authn.is_admin) return json({ error: "Only admins signed in with email can manage the team." }, 403);
+        // Owner rows are the studio team and are never listed/edited as client members.
 
         if (path === "/api/team" && req.method === "GET") {
-          const { data } = await supabase.from("ps_users").select("email,label,is_admin,created_at")
+          const { data } = await supabase.from("ps_users").select("email,label,is_admin,is_owner,created_at")
             .eq("client_id", client.id).order("created_at");
-          return json({ team: data ?? [], you: authn.email });
+          const { data: owners } = authn.is_owner
+            ? await supabase.from("ps_users").select("email,is_owner").eq("is_owner", true).order("email")
+            : { data: [] as any[] };
+          return json({ team: data ?? [], owners: owners ?? [], you: authn.email, client: client.name });
         }
 
         if (path === "/api/team" && req.method === "POST") {

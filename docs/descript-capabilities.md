@@ -44,6 +44,21 @@ These were tested on a real two-person Rooms episode through our own AI-assistan
 - **Agent honours explicit time ranges** ("from 0:40 to 1:22"), which is how we cut scored clips deterministically.
 - Caveat that remains: outcomes are prompt-driven, so they are reproducible in practice but not contractually guaranteed. Always review the share link.
 
+## THE reel-quality gotcha (found 26 Aug, fixed)
+
+**A portrait canvas is not a reel.** Told only "vertical 1080x1920", Underlord creates the right canvas but leaves the 16:9 source letterboxed in the middle — a small widescreen island with huge black bars, captions floating below it. Unusable for social, and it looked like the feature was broken.
+
+The fix is prompt-level and now baked into every reel job (`REEL_FRAMING` in the function):
+- the footage must FILL the frame edge to edge — scale the source UP and crop the sides; no black bars, no letterboxing, no empty space (stated explicitly, including that a floating 16:9 video "is wrong and unusable")
+- frame the person, not the room: head and shoulders filling the width, eyes ~1/3 down, crop sides never the face
+- cut to whoever is speaking and re-crop them the same way
+- captions burned in, large, bold, centred in the lower third, clear of the bottom edge, never over the face
+- plus the client's logo in the chosen corner at ~10% width
+
+Verified: an already-broken reel was repaired with this exact instruction and the agent replied "bounding box expanded to cover the entire canvas, source scales to fill edge-to-edge with sides cropped". There is also a one-click **Fix framing** action on every reel card for the rare miss.
+
+**Lesson for the two-pager:** Descript's agent does what it is told very literally. First-draft quality comes from prompt specificity, not from extra human passes.
+
 ## Our reel-selection layer (added 26 Aug, George's spec)
 
 Descript's agent alone picks clips by vibe. We now score them ourselves first:
