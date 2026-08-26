@@ -1,13 +1,15 @@
 // Podcast Studio — agentic podcast production pipeline
 // Edge function `studio` in Supabase project mgnjlymtjmcoskqinhid (verify_jwt = false).
 //
-// Flow: client records in Descript → we discover the project → Underlord agent job
-// produces the episode (filler words, studio sound, captions) → publish (share +
-// download URLs) → our own selection layer scores every conversational exchange
-// (emotion, context, dynamics, ICP fit, K-factor) and ranks the best N → an agent
-// job cuts those exact ranges as 9:16 subtitled reels → each published → transcript
-// exported → an LLM writes LinkedIn posts. Clients chat tweaks from the dashboard;
-// each message becomes an Underlord agent job, then a republish.
+// Flow: record → discover → (optional branding import) → produce (tight edit,
+// multicam by active speaker, dynamic framing, Studio Sound, music bed, trending
+// captions, logo) → publish → QA pass that re-checks and fixes the episode →
+// score every conversational exchange (emotion/context/dynamics/ICP, K-factor) →
+// cut several FULL-FRAME 9:16 reels from the exact winning ranges → publish each
+// → transcript → LinkedIn posts.
+//
+// Roles: owners (our team) act on any client via ?client_id=; client members are
+// hard-scoped to their own workspace. Access keys remain for external clients.
 //
 // Descript API: https://docs.descriptapi.com (base https://descriptapi.com/v1)
 // All editorial ops go through POST /jobs/agent (natural-language prompt).
@@ -97,8 +99,9 @@ function humanDscError(e: unknown): string {
 }
 
 // ---------- auth ----------
-// Two ways in: a per-client access key (external clients) or a Supabase Auth
-// magic-link session (team members whitelisted in ps_users).
+// Three ways in: a per-client access key (external clients), or a Supabase Auth
+// magic-link session belonging to an owner (our team, any client) or to a client
+// member (locked to exactly one workspace).
 type Authn = { client: any; email?: string; is_admin?: boolean; is_owner?: boolean };
 
 async function resolveClient(req: Request, url: URL): Promise<Authn | null> {
@@ -118,7 +121,7 @@ async function resolveClient(req: Request, url: URL): Promise<Authn | null> {
   // Owners (our team) may act on any client; everyone else is locked to theirs.
   const wanted = url.searchParams.get("client_id");
   if (memb.is_owner) {
-    let q = supabase.from("ps_clients").select("*").eq("active", true);
+    const q = supabase.from("ps_clients").select("*").eq("active", true);
     const { data: c } = wanted
       ? await q.eq("id", wanted).maybeSingle()
       : await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -168,7 +171,7 @@ function reelFraming(client: any, shortEpisode: boolean): string[] {
     "- Remove filler words and dead air inside the clip so it never drags, and apply Studio Sound.",
     "- Add a subtle push-in on the strongest line so the frame is never static for the whole clip.",
     musicLine(client, true),
-    `- Length: ${shortEpisode ? "20 to 45 seconds" : "30 to 60 seconds"} \u2014 whatever makes the moment land without padding.`,
+    `- Length: ${shortEpisode ? "20 to 45 seconds" : "30 to 60 seconds"} — whatever makes the moment land without padding.`,
     "- No intro, no outro, no title cards, no stock footage.",
   ].filter(Boolean);
 }
@@ -187,13 +190,14 @@ function qaPrompt(client: any, brandFile?: string | null): string {
     "3. Framing varies between scenes and no stretch is completely frozen; faces are well framed with the eyeline in the upper third.",
     "4. The footage fills the entire 16:9 frame: no black bars, no letterboxing, no empty space.",
     "5. Studio Sound is applied to every clip and all speakers are level-matched.",
-    music ? "6. Background music is present and sits clearly under the speech. (Volume fades need manual keyframes and are out of scope \u2014 do not report them as a failure.)" : "6. There is no unintended background music or noise.",
+    music ? "6. Background music is present and sits clearly under the speech. (Volume fades need manual keyframes and are out of scope — do not report them as a failure.)" : "6. There is no unintended background music or noise.",
     "7. Captions are burned in, bold, readable on a phone, correctly timed, two lines maximum, and never cover a face or touch the bottom edge.",
     brandFile ? `8. The branding image "${brandFile}" is visible in the ${pos} corner for the whole episode and covers nothing important.` : "8. No stray overlays or leftover graphics remain.",
     "",
     "Then reply with one short line per item saying PASS or FIXED (naming what you changed). If something genuinely cannot be done with this footage, say NOT POSSIBLE and why.",
   ].filter(Boolean).join("\n");
 }
+
 function producePrompt(client: any, brandFile?: string | null): string {
   const pos = (client?.watermark_position === "top-left") ? "top-left" : "top-right";
   return [
@@ -210,7 +214,7 @@ function producePrompt(client: any, brandFile?: string | null): string {
     "- Vary the framing between scenes: alternate slightly wider and tighter crops (roughly 1.05x to 1.35x) with the focal point a little above centre so faces stay well framed and the eyeline sits in the upper third.",
     "- On any long single-speaker stretch, add a slow, subtle push-in or Ken Burns style drift so the frame is never frozen.",
     "- Use clean, quick transitions between scenes: simple cuts, or a short crossfade where it genuinely helps. Nothing flashy.",
-    "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive \u2014 that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
+    "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive — that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
     "",
     "MAKE IT SOUND PROFESSIONAL:",
     "- Apply Studio Sound to every clip so voices are clean, warm and level-matched across speakers.",
@@ -228,7 +232,6 @@ function producePrompt(client: any, brandFile?: string | null): string {
     client?.intro_notes ? `Extra production notes from the client: ${client.intro_notes}` : "",
   ].filter(Boolean).join("\n");
 }
-
 
 function brandLine(client: any, brandFile?: string | null): string {
   if (!brandFile) return "";
@@ -291,7 +294,7 @@ How to judge every candidate (this is the whole job):
 - ICP RELEVANCE: it speaks to the audience above and their problems.
 - K-FACTOR (0-100): how likely a viewer is to share, save or comment. Weigh hook strength, emotional charge, specificity (numbers, names, stakes), contrarian value, and how quotable the payoff is. Be honest and discriminating — spread the scores, do not give everything 80+.
 
-${avoid.length ? `Already offered to this client and REJECTED as options \u2014 do not choose these ranges or anything substantially overlapping them, find genuinely different moments: ${avoid.map(([a, b]) => `${a}-${b}s`).join(", ")}\n` : ""}Hard rules for each clip:
+${avoid.length ? `Already offered to this client and REJECTED as options — do not choose these ranges or anything substantially overlapping them, find genuinely different moments: ${avoid.map(([a, b]) => `${a}-${b}s`).join(", ")}\n` : ""}Hard rules for each clip:
 - ${Number(episodeDuration) > 0 && Number(episodeDuration) < 420 ? "20 to 45 seconds long (this is a short episode, so shorter clips are expected)" : "30 to 60 seconds long, aiming for ~45 seconds"}.
 - Give the client a CHOICE: return several distinct options spread across the episode, not one.
 - Must START on the hook line itself — the first sentence has to earn attention with no setup.
@@ -364,7 +367,7 @@ async function generatePosts(client: any, episode: any, transcript: string): Pro
 }
 
 // Score + rank candidate clips, then sanity-check them against George's rules
-// (30-60s, no overlaps, inside the episode) before they reach the editor.
+// (length, no overlaps, inside the episode) before they reach the editor.
 async function selectReelClips(client: any, episode: any, transcript: string, n: number, avoid: [number, number][] = []): Promise<any[]> {
   const dur = Number(episode.duration_seconds ?? 0);
   const text = trimTranscript(transcript);
@@ -487,7 +490,7 @@ async function startPublishJob(token: string, job: any, project_id: string, comp
   await updateJob(job.id, {
     step: "publishing",
     descript_job_id: res.job_id,
-    payload: { ...job.payload, ...extraPayload, publishing_composition_id: composition_id },
+    payload: { ...job.payload, ...extraPayload, publishing_composition_id: composition_id, download_retries: 0 },
   });
   return res;
 }
@@ -560,6 +563,18 @@ async function advanceJob(job: any, dscStatus: any | null) {
         return;
       }
 
+      if (job.kind === "qa_pass") {
+        const brandFile = client.watermark_url
+          ? `Branding/podcast-logo.${(String(client.watermark_url).split("?")[0].match(/\.(png|jpg|jpeg|webp)$/i)?.[1] ?? "png").toLowerCase()}`
+          : null;
+        await startAgentJob(token, job, qaPrompt(client, brandFile), {
+          project_id: episode.descript_project_id,
+          composition_id: episode.main_composition_id ?? undefined,
+          model: client.descript_model,
+        });
+        return;
+      }
+
       // Our own selection layer: score every candidate exchange, keep the best N.
       if (job.kind === "select_reels") {
         // Too short to cut anything from: say so plainly instead of failing.
@@ -574,7 +589,7 @@ async function advanceJob(job: any, dscStatus: any | null) {
         }
         // The client should always have a choice, so aim for several clips: shorter
         // targets on a short episode rather than collapsing to a single reel.
-        const dur = Number(episode.duration_seconds ?? 0);
+        const dur = dSec;
         const want = Math.min(Math.max(client.reel_count ?? 7, 1), 15);
         const per = dur > 0 && dur < 420 ? 40 : 55;
         let n = dur > 0 ? Math.max(1, Math.min(want, Math.floor(dur / per))) : want;
@@ -611,8 +626,6 @@ async function advanceJob(job: any, dscStatus: any | null) {
           .eq("episode_id", episode.id).not("start_s", "is", null).order("rank");
         const j2 = { ...job, payload: { ...job.payload, before, picked_ids: (picks ?? []).map((p: any) => p.id) } };
         await updateJob(job.id, { payload: j2.payload });
-        // Cut the exact ranges our selection layer chose; only fall back to a
-        // generic "find something good" prompt if no selection exists.
         // The branding image was imported into this project during production,
         // so reels can carry the same logo without importing it again.
         let brandFile: string | null = null;
@@ -621,24 +634,14 @@ async function advanceJob(job: any, dscStatus: any | null) {
           const candidate = `Branding/podcast-logo.${ext}`;
           if (Object.keys(project.media_files ?? {}).some((k: string) => k === candidate)) brandFile = candidate;
         }
+        // Cut the exact ranges our selection layer chose; only fall back to a
+        // generic "find something good" prompt if no selection exists.
         const shortEp = Number(episode.duration_seconds ?? 0) > 0 && Number(episode.duration_seconds) < 420;
         const prompt = picks?.length
           ? timedReelsPrompt(client, picks, brandFile, shortEp)
           : reelsPrompt(client, episode.name, n, brandFile, shortEp);
         await startAgentJob(token, j2, prompt, {
           project_id: episode.descript_project_id, model: client.descript_model,
-        });
-        return;
-      }
-
-      if (job.kind === "qa_pass") {
-        const brandFile = client.watermark_url
-          ? `Branding/podcast-logo.${(String(client.watermark_url).split("?")[0].match(/\.(png|jpg|jpeg|webp)$/i)?.[1] ?? "png").toLowerCase()}`
-          : null;
-        await startAgentJob(token, job, qaPrompt(client, brandFile), {
-          project_id: episode.descript_project_id,
-          composition_id: episode.main_composition_id ?? undefined,
-          model: client.descript_model,
         });
         return;
       }
@@ -735,13 +738,25 @@ async function advanceJob(job: any, dscStatus: any | null) {
         return;
       }
 
+      if (job.kind === "qa_pass" && episode) {
+        await supabase.from("ps_episodes").update({
+          qa_report: r.agent_response ?? null, qa_at: new Date().toISOString(),
+        }).eq("id", episode.id);
+        if (r.project_changed && episode.main_composition_id) {
+          await startPublishJob(token, job, episode.descript_project_id, episode.main_composition_id);
+        } else {
+          await updateJob(job.id, { step: "done" });
+        }
+        return;
+      }
+
       if (job.kind === "make_reels" && episode) {
         const project = await getProject(token, episode.descript_project_id);
         const before = new Set((job.payload?.before ?? []) as string[]);
         let fresh = (project.compositions ?? []).filter((c: any) => c.id && !before.has(c.id));
         if (!fresh.length) fresh = (project.compositions ?? []).filter((c: any) => /^reel/i.test(c.name ?? ""));
         if (!fresh.length) {
-          await failJob(job, new Error("The editor did not produce any clips from this recording \u2014 it may be too short or too quiet. Try 'Re-score & regenerate'."));
+          await failJob(job, new Error("The editor did not produce any clips from this recording — it may be too short or too quiet. Try 'Re-score & regenerate'."));
           return;
         }
         fresh.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
@@ -779,18 +794,6 @@ async function advanceJob(job: any, dscStatus: any | null) {
         const first = queue.shift();
         await supabase.from("ps_reels").update({ status: "publishing" }).eq("episode_id", episode.id).eq("composition_id", first);
         await startPublishJob(token, job, episode.descript_project_id, first, { publish_queue: queue });
-        return;
-      }
-
-      if (job.kind === "qa_pass" && episode) {
-        await supabase.from("ps_episodes").update({
-          qa_report: r.agent_response ?? null, qa_at: new Date().toISOString(),
-        }).eq("id", episode.id);
-        if (r.project_changed && episode.main_composition_id) {
-          await startPublishJob(token, job, episode.descript_project_id, episode.main_composition_id);
-        } else {
-          await updateJob(job.id, { step: "done" });
-        }
         return;
       }
 
@@ -844,7 +847,6 @@ async function advanceJob(job: any, dscStatus: any | null) {
           status: "ready", produced_at: new Date().toISOString(), error: null,
         }).eq("id", episode.id);
         await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
-        // Chain the rest of the pipeline.
         // Only skip follow-up work that is already IN FLIGHT. Anything that
         // finished against a previous edit is stale and must run again, or the
         // client ends up with reels cut against timings that no longer exist.
@@ -861,6 +863,16 @@ async function advanceJob(job: any, dscStatus: any | null) {
         return;
       }
 
+      if (job.kind === "qa_pass" && episode) {
+        await supabase.from("ps_episodes").update({
+          main_share_url: urls.share_url ?? episode.main_share_url,
+          main_download_url: urls.download_url ?? episode.main_download_url,
+          main_download_expires_at: urls.download_expires_at ?? episode.main_download_expires_at,
+        }).eq("id", episode.id);
+        await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
+        return;
+      }
+
       if (job.kind === "make_reels" && episode) {
         await supabase.from("ps_reels").update({ ...urls, status: "ready" })
           .eq("episode_id", episode.id).eq("composition_id", compId);
@@ -873,16 +885,6 @@ async function advanceJob(job: any, dscStatus: any | null) {
           await updateJob(job.id, { step: "done" });
           await logEvent("reels_ready", { episode_id: episode.id });
         }
-        return;
-      }
-
-      if (job.kind === "qa_pass" && episode) {
-        await supabase.from("ps_episodes").update({
-          main_share_url: urls.share_url ?? episode.main_share_url,
-          main_download_url: urls.download_url ?? episode.main_download_url,
-          main_download_expires_at: urls.download_expires_at ?? episode.main_download_expires_at,
-        }).eq("id", episode.id);
-        await updateJob(job.id, { step: "done", result: { ...(job.result ?? {}), ...urls } });
         return;
       }
 
@@ -1082,7 +1084,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...result });
     }
 
-    // ----- admin -----
+    // ----- admin (bootstrap only; day-to-day is done in-app) -----
     if (path.startsWith("/admin/")) {
       if (!(await isAdmin(req, url))) return json({ error: "not_authorized" }, 401);
 
@@ -1122,7 +1124,7 @@ Deno.serve(async (req) => {
       if (path === "/admin/clients/update" && req.method === "POST") {
         const { client_id, ...fields } = body;
         if (!client_id) return json({ error: "client_id required" }, 400);
-        const allowed = ["name", "logo_url", "target_audience", "brand_notes", "reel_count", "auto_produce", "active", "descript_model", "descript_token", "room_url"];
+        const allowed = ["name", "logo_url", "target_audience", "brand_notes", "reel_count", "auto_produce", "active", "descript_model", "descript_token", "room_url", "watermark_url", "watermark_position", "intro_notes", "music_style", "caption_style", "qa_pass"];
         const patch: Record<string, unknown> = {};
         for (const k of allowed) if (k in fields) patch[k] = fields[k];
         if (typeof patch.descript_token === "string" && patch.descript_token) {
@@ -1210,7 +1212,7 @@ Deno.serve(async (req) => {
         return json({ ok: true, client_id: created.id, access_key: created.access_key, invited: invites });
       }
 
-      // ----- settings: content brief + connection, editable in-app -----
+      // ----- settings: content brief + look + connection, editable in-app -----
       if (path === "/api/settings" && req.method === "GET") {
         return json({
           name: client.name, logo_url: client.logo_url,
@@ -1301,7 +1303,6 @@ Deno.serve(async (req) => {
       // ----- team management (email-signed-in admins only) -----
       if (path.startsWith("/api/team")) {
         if (!authn.email || !authn.is_admin) return json({ error: "Only admins signed in with email can manage the team." }, 403);
-        // Owner rows are the studio team and are never listed/edited as client members.
 
         if (path === "/api/team" && req.method === "GET") {
           const { data } = await supabase.from("ps_users").select("email,label,is_admin,is_owner,created_at")
@@ -1317,7 +1318,8 @@ Deno.serve(async (req) => {
           const label = body?.label ? String(body.label).slice(0, 60) : null;
           const makeAdmin = !!body?.is_admin;
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
-          const { data: existing } = await supabase.from("ps_users").select("client_id,is_admin").eq("email", email).maybeSingle();
+          const { data: existing } = await supabase.from("ps_users").select("client_id,is_admin,is_owner").eq("email", email).maybeSingle();
+          if (existing?.is_owner) return json({ error: "That address belongs to the studio team." }, 400);
           if (existing && existing.client_id !== client.id) return json({ error: "That email already belongs to another workspace." }, 400);
           if (existing?.is_admin && !makeAdmin) {
             const { count } = await supabase.from("ps_users").select("email", { count: "exact", head: true })
@@ -1327,15 +1329,16 @@ Deno.serve(async (req) => {
           const { error } = await supabase.from("ps_users").upsert(
             { email, client_id: client.id, label, is_admin: makeAdmin }, { onConflict: "email" });
           if (error) return json({ error: error.message }, 400);
-          await logEvent("team_member_upsert", { by: authn.email, email, is_admin: makeAdmin });
+          await logEvent("team_member_upsert", { by: authn.email, email, client: client.name, is_admin: makeAdmin });
           return json({ ok: true });
         }
 
         if (path === "/api/team/remove" && req.method === "POST") {
           const email = String(body?.email ?? "").trim().toLowerCase();
           if (email === authn.email) return json({ error: "You can't remove yourself." }, 400);
-          const { data: row } = await supabase.from("ps_users").select("is_admin,client_id").eq("email", email).maybeSingle();
+          const { data: row } = await supabase.from("ps_users").select("is_admin,is_owner,client_id").eq("email", email).maybeSingle();
           if (!row || row.client_id !== client.id) return json({ error: "not_found" }, 404);
+          if (row.is_owner) return json({ error: "Studio team members cannot be removed here." }, 400);
           if (row.is_admin) {
             const { count } = await supabase.from("ps_users").select("email", { count: "exact", head: true })
               .eq("client_id", client.id).eq("is_admin", true);
@@ -1492,7 +1495,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      "Podcast Studio API. Client endpoints under /api/* (access key required). Runs on Descript + AI agents.",
+      "Podcast Studio API. Client endpoints under /api/* (access key or signed-in session required). Runs on Descript + AI agents.",
       { headers: { ...CORS, "Content-Type": "text/plain" } },
     );
   } catch (e) {
