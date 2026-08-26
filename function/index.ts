@@ -162,10 +162,22 @@ function musicLine(client: any): string {
 const REEL_LOUDNESS =
   "- LOUDNESS (critical): the voices in this clip must be exactly as loud as they are in the source episode. Do NOT turn the speech down to make room for the music — turn the music down instead. The finished clip should measure about -14 LUFS integrated with peaks near -1 dBFS, the same as the episode. A reel that plays quietly gets scrolled past, and speech that sits at the same level as the music is wrong.";
 
+// Trending = the YouTube Shorts / TikTok caption grammar: a couple of words at a
+// time on ONE line, very large, active word popping. Sentence-shaped two-line
+// blocks read as a subtitle track and look dated on short-form.
 function captionLine(client: any): string {
   const trending = (client?.caption_style ?? "trending") !== "clean";
   return trending
-    ? "- Captions in the modern social style: burned in, with word-by-word karaoke highlighting where the word currently being spoken is emphasised in a bright accent colour against bold white text. Heavy sans-serif face, never thin or light weights, with a subtle dark outline or shadow so it reads on any background. Large enough to read on a phone at arm's length. 3 to 6 words per line, two lines maximum on screen at once, centred. Place the caption block so its baseline sits around 78-82% of the frame height: clearly inside the lower third, with breathing room beneath it, never touching the bottom edge and never covering a face."
+    ? [
+      "- Captions must match the style trending YouTube Shorts and TikTok videos use. This is a specific look, not generic subtitles:",
+      "  - ONE SHORT PHRASE AT A TIME: only 1 to 3 words on screen at once, always on a SINGLE line. Never a full sentence, never two lines, never a paragraph block. The text changes rapidly, in time with the speech.",
+      "  - VERY LARGE: the phrase should span roughly 60-80% of the frame width. Short-form captions are much bigger than normal subtitles.",
+      "  - Heavy condensed sans-serif, ALL CAPS, bold weight, tight letter spacing.",
+      "  - Pure white text with a thick dark outline plus a soft drop shadow, so it stays readable over any background.",
+      "  - The word currently being spoken pops in a bright accent colour (yellow or green) while the rest of the phrase stays white. The highlight moves word by word, locked to the audio.",
+      "  - Centred horizontally, sitting vertically around 70-80% of the frame height: below the face, well clear of the bottom edge, and never covering the speaker's mouth or eyes.",
+      "  - No caption background box, no bubble, no panel behind the text.",
+    ].join("\n")
     : "- Captions: burned in, clean and understated, bold white sans-serif with a soft shadow, 3 to 6 words per line, two lines maximum, centred, baseline around 78-82% of the frame height, never touching the bottom edge or covering a face.";
 }
 
@@ -193,13 +205,14 @@ function qaPrompt(client: any, brandFile?: string | null): string {
   return [
     "Quality-check the main (longest) video composition of this project against the checklist below. For every item: if it is already satisfied, leave it alone; if it is NOT satisfied, fix it now.",
     "",
-    "This episode must read as a calm, professionally shot podcast conversation — never as a trailer or a highlight reel. Where an item below asks you to REMOVE cuts or movement, removing them is the fix; do not add energy back.",
+    "This episode must read as a calm, professionally shot podcast conversation — never as a trailer or a highlight reel. Calm does not mean lifeless: both people must be seen, and it must always be clear who is talking to whom.",
     "",
     "1. No filler words, stumbles, retakes or dead air remain, and the conversation still sounds natural rather than rushed or clipped.",
-    "2. The visible camera is on whoever is speaking, and every cut lands on a speaker change. No cut interrupts a sentence.",
-    "3. No shot is shorter than about 5 seconds, and the episode does not flick between angles for variety. A long steady shot of the person speaking is CORRECT — if you find rapid or decorative cutting, remove those cuts and let the shot run.",
-    "4. Nothing moves inside a shot: no zoom, no push-in, no Ken Burns drift, no pan, no scaling. If you find any such movement, remove it so the framing is static.",
-    "5. The footage fills the entire 16:9 frame: no black bars, no letterboxing, and no multi-camera layout left in place where a feed is inactive.",
+    "2. The visible camera is on whoever is speaking, and every cut lands on a speaker change. No cut interrupts a sentence. Whoever asks a question is shown asking it, rather than the question playing over the other person's face.",
+    "3. No shot is shorter than about 5 seconds, and the episode does not flick between angles for variety. A steady shot of the person speaking is CORRECT — if you find rapid or decorative cutting, remove those cuts and let the shot run.",
+    "3b. BOTH people are seen regularly. No stretch longer than about 30 seconds shows only one person's face — where you find one, either switch that stretch to a two-up layout showing both, or add one brief reaction shot of the listener (at least 3 seconds) and return to the speaker. An episode that never shows the interviewer has failed this check.",
+    "4. Nothing MOVES inside a shot: no animated zoom, push-in, Ken Burns drift or pan, and no scale or position that changes while a shot is on screen. Remove movement only. A fixed crop that holds the same value for the whole shot is good framing, not movement — do not reset a steady crop back to the raw camera framing.",
+    "5. The footage fills the entire 16:9 frame: no black bars and no letterboxing. Split and multi-camera layouts are fine and should be KEPT wherever every pane shows a live speaker — only replace a layout when one of its panes is dead or empty, since that is what leaves a black panel.",
     "6. Studio Sound is applied to every clip and all speakers are level-matched.",
     "7. There is NO background music or soundtrack track on the episode. If one exists, remove it.",
     "8. There are NO captions, subtitles or burned-in text of any kind. If a caption track exists, remove it.",
@@ -220,13 +233,16 @@ function producePrompt(client: any, brandFile?: string | null): string {
     "- Close the obviously long silences, but keep the natural rhythm of the conversation. Do not make it feel rushed or clipped.",
     "- Cut throat-clearing, background chatter and any off-topic housekeeping at the start or the end.",
     "",
-    "CAMERA WORK — CALM AND CONVERSATIONAL (this is the most important part):",
-    "- Show whoever is currently speaking, and STAY on them for as long as they keep speaking. A cut happens because the speaker changed — never to add energy or variety.",
+    "CAMERA WORK — CALM BUT ALIVE (this is the most important part):",
+    "- It must always be clear WHO is speaking and WHO they are speaking to. The interviewer and the guest must BOTH be seen regularly. An episode that stays on one person's face throughout looks dead and is wrong.",
+    "- Whenever someone asks a question, CUT TO THAT PERSON and show them asking it. Never play a question over the other person's face.",
+    "- The rest of the time, show whoever is currently speaking and stay on them while they keep speaking. A cut happens because the speaker changed, not to add energy.",
     "- Never cut in the middle of someone's sentence or thought.",
-    "- Hold every shot for at least about 5 seconds. Do not cut rapidly and do not alternate between angles to keep things moving. A long, steady shot of the person who is talking is CORRECT and is what a podcast is supposed to look like.",
-    "- Use a two-up or group layout for genuine back-and-forth or shared laughter, then settle back onto the speaker.",
-    "- NO zooming, NO push-ins, NO Ken Burns drift, NO panning, NO scaling changes inside a shot. The framing must be completely still while a shot is on screen.",
-    "- Use one consistent, well-composed crop per camera for the whole episode. Do not vary the crop from scene to scene.",
+    "- Hold every shot for at least about 5 seconds. Do not cut rapidly and do not alternate between angles just to keep things moving.",
+    "- Use a two-up / side-by-side layout showing both people for any genuine back-and-forth or quick exchange. This is the natural default for conversation because it keeps both faces on screen without needing extra cuts.",
+    "- If one person speaks for longer than about 30 seconds, cut away once or twice to the person listening so their reaction is visible, then return to the speaker. Hold each of those reaction shots for at least 3 seconds.",
+    "- Nothing may MOVE inside a shot: no animated zoom, no push-in, no Ken Burns drift, no panning, and no scale or position that changes while a shot is on screen. The framing must be completely still.",
+    "- Do choose a good fixed crop: a slightly tighter framing held at one constant value for the whole shot is not movement, and it frames the speaker far better than the raw camera. Use one consistent, well-composed crop per camera for the whole episode and do not vary it from scene to scene.",
     "- Simple hard cuts only. No transitions, no effects, no motion graphics, no title cards.",
     "- The footage must fill the whole 16:9 frame: no black bars, no letterboxing, no empty space. Never leave a multi-camera layout in place when one of its feeds is inactive — that leaves a black panel; switch that scene to a layout that matches the number of live speakers.",
     "",
